@@ -1,0 +1,78 @@
+---
+title: "OAuth2/OIDC single sign-on for Caddy Proxy Manager"
+description: "Configure OAuth2/OIDC SSO for the CPM dashboard using Authentik, Keycloak, Auth0, or any OIDC-compliant provider. Supports UI and env-var configuration."
+---
+
+Caddy Proxy Manager supports OAuth2/OIDC single sign-on for the dashboard itself. Users can log in with any OIDC-compliant identity provider alongside (or instead of) username/password credentials, and link OAuth identities to existing accounts from their profile page.
+
+## Supported providers
+
+Any OIDC-compliant provider works, including:
+
+- Authentik
+- Keycloak
+- Auth0
+- GitHub (via OIDC wrapper)
+- Google
+- Any provider with a standard OIDC discovery endpoint
+
+## Option A: Configure via the dashboard (recommended)
+
+<Steps>
+  <Step title="Navigate to OAuth Providers">
+    Go to **Settings → OAuth Providers** and click **Add Provider**.
+  </Step>
+  <Step title="Fill in provider details">
+    Enter the provider name, client ID, client secret, and OIDC issuer URL. The issuer URL is used for OIDC discovery — CPM auto-fetches the authorization, token, and userinfo endpoints.
+  </Step>
+  <Step title="Copy the callback URL">
+    CPM displays the callback URL after saving. Add this URL to your OAuth provider's allowed redirect URIs.
+  </Step>
+</Steps>
+
+The callback URL format is:
+
+```
+{BASE_URL}/api/auth/oauth2/callback/{provider-id}
+```
+
+## Option B: Configure via environment variables
+
+Add these variables to your `.env` before starting the stack:
+
+```bash .env
+BASE_URL=https://caddy-manager.example.com
+OAUTH_ENABLED=true
+OAUTH_PROVIDER_NAME=Authentik
+OAUTH_CLIENT_ID=your-client-id
+OAUTH_CLIENT_SECRET=your-client-secret
+OAUTH_ISSUER=https://auth.example.com/application/o/app/
+```
+
+<Warning>
+`BASE_URL` must exactly match the URL users use to access the dashboard. It is used to construct the OAuth callback URL.
+</Warning>
+
+## Optional endpoint overrides
+
+If your provider does not support OIDC discovery, override individual endpoints:
+
+```bash .env
+OAUTH_AUTHORIZATION_URL=https://auth.example.com/oauth/authorize
+OAUTH_TOKEN_URL=https://auth.example.com/oauth/token
+OAUTH_USERINFO_URL=https://auth.example.com/oauth/userinfo
+```
+
+## Linking OAuth to an existing account
+
+Users can link an OAuth identity to an existing password-based account from **Profile → Connected Accounts**. After linking, they can sign in with either method.
+
+Set `OAUTH_ALLOW_AUTO_LINKING=true` to automatically link OAuth logins to existing accounts that share the same email address — useful when migrating users to SSO.
+
+## User provisioning
+
+OAuth users are provisioned on first login with the default **user** role. An admin must manually promote them to **Admin** if needed.
+
+<Note>
+The redirect URI shown in **Settings → OAuth Providers** is the authoritative callback URL. Always use this value in your OAuth provider — do not construct the URL manually. If you upgraded from a version before 1.0-RC, update your provider's redirect URI to the new format: the old `/api/auth/callback/oauth2` path no longer works.
+</Note>

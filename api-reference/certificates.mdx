@@ -1,0 +1,98 @@
+---
+title: "REST API endpoints for certificates and mTLS"
+description: "REST API endpoints for TLS certificates, the built-in CA, mTLS client certificates, DNS providers, and mTLS roles in Caddy Proxy Manager."
+---
+
+The certificates API covers three related areas: TLS certificates used by proxy hosts, the built-in CA for mutual TLS, and client certificate management. DNS provider credentials — used for DNS-01 ACME challenges — are also managed here.
+
+## TLS certificate endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/certificates` | List all certificates |
+| `POST` | `/api/v1/certificates` | Import a custom certificate |
+| `GET` | `/api/v1/certificates/{id}` | Get certificate details |
+| `PUT` | `/api/v1/certificates/{id}` | Update a certificate |
+| `DELETE` | `/api/v1/certificates/{id}` | Delete a certificate |
+
+## Import a custom certificate
+
+**`POST /api/v1/certificates`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/certificates \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Custom Cert",
+    "certificate": "-----BEGIN CERTIFICATE-----\n...",
+    "privateKey": "-----BEGIN PRIVATE KEY-----\n..."
+  }'
+```
+
+<ParamField body="name" type="string" required>
+  Display name for the certificate.
+</ParamField>
+
+<ParamField body="certificate" type="string" required>
+  PEM-encoded certificate (and any intermediate chain).
+</ParamField>
+
+<ParamField body="privateKey" type="string" required>
+  PEM-encoded private key. Stored unencrypted in the SQLite database.
+</ParamField>
+
+## CA certificate endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/ca-certificates` | List CA certificates |
+| `POST` | `/api/v1/ca-certificates` | Create a CA certificate |
+| `DELETE` | `/api/v1/ca-certificates/{id}` | Delete a CA certificate |
+
+## Client certificate endpoints
+
+These endpoints manage mTLS client certificates issued by CPM's built-in CA.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/client-certificates` | List issued client certificates |
+| `POST` | `/api/v1/client-certificates` | Issue a new client certificate |
+| `POST` | `/api/v1/client-certificates/{id}/revoke` | Revoke a client certificate |
+| `DELETE` | `/api/v1/client-certificates/{id}` | Delete a client certificate record |
+
+## Issue a client certificate
+
+**`POST /api/v1/client-certificates`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/client-certificates \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "alice-laptop",
+    "expiresAt": "2026-01-01T00:00:00.000Z"
+  }'
+```
+
+The response includes the PEM-encoded certificate and private key. **Store the private key immediately** — it is not stored by CPM and cannot be retrieved again.
+
+## DNS provider endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/dns-providers` | List configured DNS providers |
+| `POST` | `/api/v1/dns-providers` | Add a DNS provider |
+| `PUT` | `/api/v1/dns-providers/{id}` | Update a DNS provider |
+| `DELETE` | `/api/v1/dns-providers/{id}` | Remove a DNS provider |
+
+DNS provider credentials are encrypted at rest with AES-256-GCM and are never returned in plain text via the API.
+
+## mTLS role endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/mtls-roles` | List mTLS roles |
+| `POST` | `/api/v1/mtls-roles` | Create an mTLS role |
+| `PUT` | `/api/v1/mtls-roles/{id}` | Update an mTLS role |
+| `DELETE` | `/api/v1/mtls-roles/{id}` | Delete an mTLS role |

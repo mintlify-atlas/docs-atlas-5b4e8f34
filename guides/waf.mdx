@@ -1,0 +1,88 @@
+---
+title: "Web Application Firewall with Coraza and OWASP CRS"
+description: "Enable Caddy Proxy Manager's built-in WAF to block SQLi, XSS, LFI, and RCE attacks using Coraza with the OWASP Core Rule Set, globally or per proxy host."
+---
+
+Caddy Proxy Manager includes a Web Application Firewall powered by [Coraza](https://coraza.io/), running inline inside Caddy. Requests pass through WAF rule evaluation before reaching your upstream. The OWASP Core Rule Set (CRS) is bundled and covers the most common attack categories.
+
+## Enabling the WAF
+
+Navigate to **WAF → Settings** and toggle the WAF on globally. The global `WafSettings` type controls the baseline behavior:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Enable or disable the WAF globally |
+| `mode` | `'Off' \| 'On'` | `On` blocks matching requests with HTTP 403; `Off` runs the engine in detection-only mode |
+| `load_owasp_crs` | `boolean` | Load the OWASP Core Rule Set |
+| `custom_directives` | `string` | Additional SecLang directives applied globally |
+| `excluded_rule_ids` | `number[]` | Rule IDs to suppress globally |
+
+<Tip>Start with `mode: 'Off'` (detection only), monitor the event log for a few days, suppress noisy rules, then switch to `mode: 'On'`.</Tip>
+
+## Per-host WAF configuration
+
+Each proxy host can override the global WAF settings via the `WafHostConfig` type. Open the proxy host and go to the **WAF** tab.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Enable or disable WAF for this host |
+| `mode` | `'Off' \| 'On'` | Override the WAF engine state for this host |
+| `load_owasp_crs` | `boolean` | Load the OWASP Core Rule Set for this host |
+| `custom_directives` | `string` | Additional SecLang directives for this host |
+| `excluded_rule_ids` | `number[]` | Rule IDs to suppress on this host |
+| `waf_mode` | `'merge' \| 'override'` | `merge` combines host settings with global (custom directives and excluded IDs are concatenated); `override` replaces global settings entirely |
+
+In `merge` mode, `custom_directives` from both global and host configs are joined, and `excluded_rule_ids` arrays are merged. In `override` mode, the host config is used as-is with no inheritance from global settings.
+
+## Custom directive restrictions
+
+Custom directives are validated against an allowlist before being passed to Coraza. Only the following SecLang prefixes are accepted:
+
+- `SecRule`
+- `SecAction`
+- `SecMarker`
+- `SecDefaultAction`
+
+`Include` directives, `SecRuleEngine`, `SecRuleRemoveById`, and any directive containing `ctl:ruleEngine` are rejected to prevent bypassing the WAF or including arbitrary files from the container filesystem.
+
+For example, to add a custom rule that flags a specific user-agent:
+
+```
+SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9001,phase:1,deny,status:403,log"
+```
+
+## OWASP Core Rule Set coverage
+
+When `load_owasp_crs` is enabled, Caddy loads the bundled CRS configuration from the embedded coraza-coreruleset filesystem (`@coraza.conf-recommended`, `@crs-setup.conf.example`, `@owasp_crs/*.conf`). The CRS protects against:
+
+- **SQL Injection (SQLi)** — parameterized query bypass, UNION attacks
+- **Cross-Site Scripting (XSS)** — reflected and DOM-based XSS payloads
+- **Local File Inclusion (LFI)** — path traversal attacks
+- **Remote Code Execution (RCE)** — shell injection, command substitution
+
+## WebSocket hosts
+
+When **Allow WebSocket** is enabled on a proxy host, CPM automatically prepends a SecLang rule (id `9900`) that disables WAF inspection for the initial HTTP upgrade request. This prevents silent upgrade failures while having no effect on normal HTTP traffic through the same host.
+
+## Suppressing noisy rules
+
+To suppress a rule:
+
+1. Open the **WAF → Events** log and click an event to open the detail drawer.
+2. Click **Suppress Rule** to suppress globally, or suppress per-host.
+3. Alternatively, add the rule ID to the **Suppressed Rules** tab manually.
+
+Suppressed rule IDs are written to `excluded_rule_ids` on the global `WafSettings` or per-host `WafHostConfig`, and translate to `SecRuleRemoveById` directives in the generated Caddy config.
+
+## WAF event log
+
+The event log at **WAF → Events** shows every triggered rule with:
+
+- Request path and method
+- Rule ID and message
+- Severity level
+- Classification: **Blocked** or **Detected**
+
+Audit logs are written in JSON format to `/logs/waf-audit.log` inside the Caddy container (`SecAuditLogFormat JSON`, `SecAuditEngine RelevantOnly`). Only transactions where a rule fired are logged — clean requests produce no audit entry.
+
+Use the search and filters to investigate specific IPs, paths, or rule IDs.

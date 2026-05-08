@@ -1,0 +1,92 @@
+---
+title: "Caddy Proxy Manager: Overview and Key Concepts"
+description: "Learn what Caddy Proxy Manager is, how it works with Caddy Server, and which features make it the modern choice for self-hosted reverse proxy management."
+---
+
+Caddy Proxy Manager (CPM) is a web UI for [Caddy Server](https://caddyserver.com/) that lets you manage reverse proxies, TLS certificates, firewall rules, and traffic analytics without touching a Caddyfile or JSON configuration. Built on Next.js 16, React 19, and TypeScript, it wraps Caddy's powerful HTTP and L4 engine in a clean dashboard that handles everything from basic HTTP reverse-proxying to mutual TLS and geo blocking. Whether you are running a single self-hosted service or a multi-instance deployment, CPM gives you full control through a browser UI and a REST API.
+
+## What is Caddy Proxy Manager?
+
+Caddy Proxy Manager is a full-stack web application that drives Caddy Server's Admin API instead of static config files. The frontend is built with Next.js 16, React 19, shadcn/ui, and Tailwind CSS. The backend uses Drizzle ORM with a SQLite database to store proxy host configuration, certificates, access lists, and user accounts. Traffic and WAF event data is stored in ClickHouse for fast, high-volume aggregation queries with automatic 90-day TTL retention.
+
+When you create or update a proxy host in the dashboard, CPM serialises the change into Caddy's JSON format and pushes it to Caddy's Admin API at `http://caddy:2019`. Caddy applies the configuration live — no restarts required. Certificates are obtained automatically via ACME (Let's Encrypt or ZeroSSL), and DNS-01 challenge support is available for wildcard certificates and air-gapped environments.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Proxy hosts" icon="network-wired" href="/guides/proxy-hosts">
+    Reverse-proxy HTTP and HTTPS traffic with custom headers, multiple upstreams, eight load-balancing policies, active and passive health checks, and per-host enable/disable toggle.
+  </Card>
+  <Card title="L4 TCP/UDP proxying" icon="layer-group" href="/guides/l4-proxy-hosts">
+    Stream-proxy raw TCP and UDP traffic with TLS SNI matching, proxy protocol v1/v2 support, load balancing, and per-host geo blocking. Ports are managed automatically by the l4-port-manager sidecar.
+  </Card>
+  <Card title="Web Application Firewall" icon="shield" href="/guides/waf">
+    Block SQLi, XSS, LFI, and RCE attacks using Coraza with the OWASP Core Rule Set. Enable per host, suppress noisy rules globally or per host, and write custom SecLang directives.
+  </Card>
+  <Card title="Geo blocking" icon="earth-americas" href="/guides/geo-blocking">
+    Allow or deny traffic by country, continent, ASN, CIDR range, or exact IP per proxy host. Allow rules override block rules, and fail-closed mode is supported.
+  </Card>
+  <Card title="Certificates and mTLS" icon="certificate" href="/guides/certificates">
+    Automatic ACME certificates for every proxy host, DNS-01 challenge with twelve supported providers, manual certificate import, and a built-in CA for issuing and revoking mTLS client certificates.
+  </Card>
+  <Card title="Forward Auth Portal" icon="lock" href="/guides/forward-auth">
+    Protect any proxied application with CPM's built-in identity provider. No external IdP required. Supports credential login, OAuth, user groups, per-host access lists, and excluded paths.
+  </Card>
+  <Card title="Traffic analytics" icon="chart-line" href="/guides/analytics">
+    Live traffic charts, protocol breakdown, country map, top user agents, and a searchable WAF event log — all powered by ClickHouse with configurable time ranges.
+  </Card>
+  <Card title="REST API" icon="code" href="/api-reference/overview">
+    Full REST API at `/api/v1/` with Bearer token authentication covering every resource. Interactive OpenAPI 3.1.0 docs are available in the dashboard at `/api-docs`.
+  </Card>
+</CardGroup>
+
+## Architecture
+
+A Caddy Proxy Manager deployment is a Docker Compose stack with several cooperating services:
+
+| Service | Role |
+|---------|------|
+| **web** | Next.js application serving the dashboard and REST API. Writes proxy configuration to Caddy via its Admin API. Reads access logs from the shared `caddy-logs` volume. |
+| **caddy** | Custom Caddy build with Coraza WAF, L4 extension, and geo-IP module. Receives configuration from the web container and handles all inbound HTTP/HTTPS/TCP/UDP traffic. |
+| **clickhouse** *(optional profile)* | ClickHouse analytics database. Stores traffic events and WAF events with a 90-day TTL. Activated by the `clickhouse` Docker Compose profile. |
+| **geoipupdate** *(optional profile)* | Automatically downloads and refreshes MaxMind GeoLite2 Country, City, and ASN databases every 72 hours. Required for geo blocking. Activated by the `geoipupdate` profile. |
+| **l4-port-manager** | Sidecar that watches for L4 proxy host port changes in the database and recreates the Caddy container to expose the new ports. Communicates with Docker via the socket proxy. |
+| **docker-socket-proxy** | Restricts the Docker API surface exposed to l4-port-manager, limiting access to container, network, volume, and image operations only. |
+
+All services communicate on an internal `caddy-network` bridge network. Only ports 80, 443 (Caddy) and 3000 (dashboard) are exposed to the host by default.
+
+## User roles
+
+CPM has three roles with increasing privileges. New accounts default to the **User** role. The initial admin account is created from the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables.
+
+| Capability | Viewer | User | Admin |
+|------------|:------:|:----:|:-----:|
+| Log in to the dashboard | Yes | Yes | Yes |
+| View own profile | Yes | Yes | Yes |
+| Access forward-auth-protected apps (when granted) | Yes | Yes | Yes |
+| Manage proxy hosts, certificates, and access lists | No | No | Yes |
+| Manage users, groups, and settings | No | No | Yes |
+| View analytics, audit log, and API docs | No | No | Yes |
+| Create and manage API tokens | No | No | Yes |
+| Access the REST API (`/api/v1/`) | No | No | Yes |
+
+<Note>
+  Forward Auth access is independent of role — all roles must be explicitly granted access to each protected host via the forward auth access list, including admins.
+</Note>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Deploy Caddy Proxy Manager with Docker Compose and create your first proxy host in under 10 minutes.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration">
+    Reference for every environment variable, Docker Compose profile, and volume in the stack.
+  </Card>
+  <Card title="Proxy hosts" icon="network-wired" href="/guides/proxy-hosts">
+    Learn how to configure upstreams, load balancing, custom headers, and health checks.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/overview">
+    Authenticate with a Bearer token and explore the full REST API at `/api/v1/`.
+  </Card>
+</CardGroup>

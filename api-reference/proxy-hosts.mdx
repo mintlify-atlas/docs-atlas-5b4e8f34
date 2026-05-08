@@ -1,0 +1,145 @@
+---
+title: "REST API endpoints for proxy hosts"
+description: "CRUD and enable/disable endpoints for HTTP/HTTPS proxy hosts. Manage domains, upstreams, SSL, load balancing, WAF, and geo blocking via the REST API."
+---
+
+The proxy hosts API provides full programmatic control over HTTP/HTTPS reverse proxy entries. You can create, read, update, delete, and toggle hosts without touching the dashboard.
+
+## Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/proxy-hosts` | List all proxy hosts |
+| `POST` | `/api/v1/proxy-hosts` | Create a proxy host |
+| `GET` | `/api/v1/proxy-hosts/{id}` | Get a proxy host by ID |
+| `PUT` | `/api/v1/proxy-hosts/{id}` | Update a proxy host |
+| `DELETE` | `/api/v1/proxy-hosts/{id}` | Delete a proxy host |
+| `POST` | `/api/v1/proxy-hosts/{id}/enable` | Enable a proxy host |
+| `POST` | `/api/v1/proxy-hosts/{id}/disable` | Disable a proxy host |
+
+## Create a proxy host
+
+**`POST /api/v1/proxy-hosts`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/proxy-hosts \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My App",
+    "domains": ["app.example.com"],
+    "upstreams": ["localhost:8080"],
+    "sslForced": true,
+    "hstsEnabled": true,
+    "allowWebsocket": false,
+    "preserveHostHeader": false,
+    "enabled": true
+  }'
+```
+
+### Request fields
+
+<ParamField body="name" type="string" required>
+  Display name for the proxy host.
+</ParamField>
+
+<ParamField body="domains" type="string[]" required>
+  One or more domain names to route. Caddy obtains ACME certificates for each domain automatically.
+</ParamField>
+
+<ParamField body="upstreams" type="string[]" required>
+  One or more upstream addresses. Only `http://` and `https://` schemes are accepted. Bare `host:port` is also valid.
+</ParamField>
+
+<ParamField body="certificateId" type="number">
+  ID of a manually imported certificate. Omit to use automatic ACME.
+</ParamField>
+
+<ParamField body="accessListId" type="number">
+  ID of an access list to apply HTTP basic auth.
+</ParamField>
+
+<ParamField body="sslForced" type="boolean">
+  Redirect all HTTP requests to HTTPS.
+</ParamField>
+
+<ParamField body="hstsEnabled" type="boolean">
+  Add the `Strict-Transport-Security` response header.
+</ParamField>
+
+<ParamField body="hstsSubdomains" type="boolean">
+  Include `includeSubDomains` in the HSTS header.
+</ParamField>
+
+<ParamField body="allowWebsocket" type="boolean">
+  Enable WebSocket proxying (`Connection: Upgrade` pass-through).
+</ParamField>
+
+<ParamField body="preserveHostHeader" type="boolean">
+  Pass the original `Host` header to the upstream instead of the upstream hostname.
+</ParamField>
+
+<ParamField body="skipHttpsHostnameValidation" type="boolean">
+  Skip TLS certificate validation for HTTPS upstreams. Use only with trusted internal services.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Whether Caddy should serve this host. Defaults to `true`.
+</ParamField>
+
+<ParamField body="redirects" type="RedirectRule[]">
+  Array of redirect rules. Each entry requires `from` (path pattern), `to` (destination path), and `status` (301, 302, 307, or 308).
+</ParamField>
+
+<ParamField body="locationRules" type="LocationRule[]">
+  Path-based routing rules. Each entry requires `path` (Caddy path pattern, e.g. `/api/*`) and `upstreams` (array of upstream addresses for that path).
+</ParamField>
+
+## Response object
+
+```json
+{
+  "id": 1,
+  "name": "My App",
+  "domains": ["app.example.com"],
+  "upstreams": ["localhost:8080"],
+  "certificateId": null,
+  "accessListId": null,
+  "sslForced": true,
+  "hstsEnabled": true,
+  "hstsSubdomains": false,
+  "allowWebsocket": false,
+  "preserveHostHeader": false,
+  "skipHttpsHostnameValidation": false,
+  "enabled": true,
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updatedAt": "2024-01-15T10:30:00.000Z",
+  "redirects": [],
+  "locationRules": []
+}
+```
+
+## List proxy hosts
+
+**`GET /api/v1/proxy-hosts`**
+
+Supports query parameters:
+
+| Parameter | Description |
+|---|---|
+| `search` | Filter hosts by name or domain (server-side) |
+| `page` | Page number for pagination |
+
+## Enable / disable a host
+
+```bash
+# Enable
+curl -X POST https://your-instance:3000/api/v1/proxy-hosts/1/enable \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Disable
+curl -X POST https://your-instance:3000/api/v1/proxy-hosts/1/disable \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Disabling a host removes it from the Caddy configuration without deleting it from the database.

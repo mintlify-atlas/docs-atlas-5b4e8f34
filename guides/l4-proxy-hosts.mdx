@@ -1,0 +1,158 @@
+---
+title: "L4 TCP/UDP stream proxying with Caddy Proxy Manager"
+description: "Configure layer-4 TCP and UDP stream proxies with TLS SNI matching, proxy protocol support, load balancing, health checks, and per-host geo blocking."
+---
+
+L4 proxy hosts extend Caddy's layer-4 module to proxy raw TCP and UDP traffic — not HTTP. This lets you proxy protocols that live below the HTTP layer: databases, game servers, SSH connections, mail servers, and any other TCP or UDP service. Each L4 proxy host listens on a port, optionally matches connections by TLS SNI or HTTP host, and forwards traffic to one or more upstream addresses.
+
+## What is L4 proxying?
+
+Layer-7 (HTTP) proxying works at the application protocol level: Caddy reads the HTTP request, can inspect headers, rewrite paths, and return its own responses. Layer-4 proxying works at the transport level: Caddy forwards the raw byte stream without interpreting the protocol.
+
+**Use cases for L4 proxying:**
+
+- **Databases** — PostgreSQL, MySQL, Redis, MongoDB exposed through a single port
+- **Game servers** — UDP-based game protocols (e.g. Minecraft, Valheim)
+- **SSH tunneling** — Forward SSH connections to internal hosts
+- **Mail servers** — SMTP, IMAP, POP3 port forwarding
+- **Any non-HTTP TCP/UDP service** — anything that does not speak HTTP
+
+## Creating an L4 proxy host
+
+<Steps>
+  <Step title="Open the L4 Proxy Hosts page">
+    Navigate to **L4 Proxy Hosts** in the sidebar, then click **Add L4 Proxy Host**.
+  </Step>
+  <Step title="Set the required fields">
+    Enter a **Name**, choose the **Protocol** (`tcp` or `udp`), set a **Listen Address** in `:PORT` or `HOST:PORT` format, and add at least one **Upstream** target in `host:port` format.
+  </Step>
+  <Step title="Configure matching (optional)">
+    Choose a **Matcher Type** if you want to route connections based on TLS SNI or HTTP host header. Leave it as `none` to forward all connections arriving on the port.
+  </Step>
+  <Step title="Enable proxy protocol (optional)">
+    If your upstream needs the original client IP, set a **Proxy Protocol Version** (`v1` or `v2`) to have Caddy prepend the client address to the stream.
+  </Step>
+  <Step title="Save and apply ports">
+    Click **Save**. If you added a new listen port, a banner appears prompting you to **Apply Ports** — this updates the Docker Compose port bindings and restarts the Caddy container.
+  </Step>
+</Steps>
+
+The `L4ProxyHost` type exposes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display label for this L4 host. |
+| `protocol` | `"tcp"` \| `"udp"` | Transport protocol. |
+| `listenAddress` | string | Address in `:PORT` or `HOST:PORT` format. |
+| `upstreams` | string[] | Upstream targets in `host:port` format. |
+| `matcherType` | `L4MatcherType` | How connections are matched: `none`, `tls_sni`, `http_host`, or `proxy_protocol`. |
+| `matcherValue` | string[] | Values for the matcher (SNI hostnames or HTTP host values). |
+| `tlsTermination` | boolean | Terminate TLS at Caddy and proxy the plaintext stream to the upstream. TCP only. |
+| `proxyProtocolVersion` | `"v1"` \| `"v2"` \| null | Proxy Protocol version to prepend to the outgoing stream. |
+| `proxyProtocolReceive` | boolean | Accept incoming Proxy Protocol headers from a trusted upstream proxy. |
+| `enabled` | boolean | Whether this host is active in the Caddy config. |
+
+## TLS SNI matching
+
+When `matcherType` is set to `tls_sni`, Caddy inspects the **Server Name Indication** field of the TLS ClientHello and routes the connection only if the SNI matches one of the values in `matcherValue`.
+
+This allows multiple L4 hosts to share the same port — each matched by a different SNI hostname — without Caddy needing to terminate TLS. The encrypted stream is forwarded as-is to the upstream.
+
+**Example:** Route `db.example.com` on port 443 to a database server, while `app.example.com` on the same port goes to your web backend via a separate host entry.
+
+<Note>
+  TLS SNI matching does not require `tlsTermination`. Caddy peeks at the SNI without decrypting the connection, so the upstream receives the full TLS stream.
+</Note>
+
+## Proxy protocol
+
+When `proxyProtocolVersion` is set to `v1` or `v2`, Caddy prepends a Proxy Protocol header to the outgoing TCP stream. This header contains the original client IP address and port, allowing upstreams that understand Proxy Protocol to see the real client IP even though the connection arrives from Caddy.
+
+- **v1** — text-based format, widely supported (HAProxy, NGINX, many databases)
+- **v2** — binary format, more compact and extensible
+
+`proxyProtocolReceive` is the inverse: set it to `true` when an upstream proxy (e.g. a load balancer in front of CPM) sends Proxy Protocol headers to CPM's L4 listener. Caddy will parse and trust those headers.
+
+<Warning>
+  Only enable `proxyProtocolReceive` on listeners that are exclusively reached via a trusted proxy. Accepting Proxy Protocol from untrusted sources allows IP spoofing.
+</Warning>
+
+## Load balancing and health checks
+
+Add multiple upstreams to distribute connections across backend servers. L4 load balancing supports five policies via the `L4LoadBalancingPolicy` type:
+
+| Policy | Description |
+|--------|-------------|
+| `random` | Select a random upstream for each connection. |
+| `round_robin` | Rotate through upstreams sequentially. |
+| `least_conn` | Send each new connection to the upstream with the fewest active connections. |
+| `ip_hash` | Hash the client IP to consistently send the same client to the same upstream. |
+| `first` | Always try the first upstream; fall back to others only if it is unavailable. |
+
+**Active health checks** (`L4LoadBalancerActiveHealthCheck`) probe upstreams on a schedule:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Turn active health checking on or off. |
+| `port` | number \| null | Port to probe. Defaults to the upstream port if null. |
+| `interval` | string \| null | How often to probe, e.g. `"10s"`. |
+| `timeout` | string \| null | Max wait for a probe response, e.g. `"5s"`. |
+
+**Passive health checks** (`L4LoadBalancerPassiveHealthCheck`) monitor live traffic:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Turn passive health checking on or off. |
+| `failDuration` | string \| null | How long to mark an upstream unhealthy after a failure, e.g. `"30s"`. |
+| `maxFails` | number \| null | Number of consecutive failures before an upstream is marked unhealthy. |
+| `unhealthyLatency` | string \| null | Connections exceeding this latency count as failures, e.g. `"3s"`. |
+
+Additional failover fields on `L4LoadBalancerConfig`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tryDuration` | string \| null | Total time budget for trying all upstreams on a connection, e.g. `"5s"`. |
+| `tryInterval` | string \| null | Wait between upstream attempts, e.g. `"250ms"`. |
+| `retries` | number \| null | Maximum number of upstream attempts per connection. |
+
+## Port management
+
+L4 proxy hosts listen on raw TCP/UDP ports. When you add or change a listen port, Docker must expose that port on the Caddy container. Caddy Proxy Manager handles this automatically via the **l4-port-manager** sidecar container.
+
+The flow works as follows:
+
+1. You save or delete an L4 proxy host that changes the set of required ports.
+2. The web app writes a `docker-compose.l4-ports.yml` override file listing the new ports.
+3. The web app writes an `l4-ports.trigger` file on the shared data volume.
+4. The l4-port-manager sidecar detects the trigger file and runs `docker compose up -d caddy`.
+5. Docker recreates the Caddy container with the updated port bindings.
+6. The sidecar writes `l4-ports.status` with the result.
+7. The CPM dashboard reads the status file and shows you the outcome.
+
+Click **Apply Ports** in the L4 Proxy Hosts page header after making port changes to start this process.
+
+<Note>
+  Port changes trigger a Caddy container restart via the l4-port-manager sidecar. Brief downtime (typically a few seconds) is expected during port updates. Plan port changes during maintenance windows for production deployments.
+</Note>
+
+You can check whether the sidecar is running by looking at the port apply status indicator in the dashboard. If no status file exists yet, the sidecar is not running — refer to your Docker Compose setup.
+
+## Geo blocking for L4 hosts
+
+L4 proxy hosts support the same geo blocking capabilities as HTTP proxy hosts. You can block or allow connections by country, continent, ASN, CIDR range, or exact IP address using the `L4GeoBlockConfig` type.
+
+Allow rules take precedence over block rules. For example, you can block an entire continent and then allow specific ASNs or IP ranges through.
+
+Geo blocking for L4 hosts requires the MaxMind GeoLite2 databases. See the geo blocking guide for setup instructions.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `block_countries` | string[] | ISO 3166-1 alpha-2 country codes to block, e.g. `["CN", "RU"]`. |
+| `allow_countries` | string[] | Country codes to explicitly allow (override block rules). |
+| `block_continents` | string[] | Continent codes: `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA`. |
+| `block_asns` | number[] | Autonomous System Numbers to block. |
+| `block_cidrs` | string[] | IP ranges in CIDR notation to block, e.g. `["192.0.2.0/24"]`. |
+| `block_ips` | string[] | Exact IP addresses to block. |
+| `allow_*` | various | Allow-list equivalents for each category above. |
+
+The `L4GeoBlockMode` field controls how per-host rules interact with global geo block settings: `"merge"` combines them, `"override"` replaces the global config entirely for this host.

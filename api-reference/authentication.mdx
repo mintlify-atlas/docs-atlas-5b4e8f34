@@ -1,0 +1,48 @@
+---
+title: "Authenticate API requests with Bearer tokens"
+description: "Create API tokens in the CPM dashboard and pass them as Bearer tokens. Tokens carry Admin-level access, support optional expiration, and revoke instantly."
+---
+
+The Caddy Proxy Manager REST API uses Bearer token authentication. Tokens are created in the dashboard under **Settings → API Tokens** and must be included in the `Authorization` header of every request. Only users with the **Admin** role can create tokens.
+
+## Creating an API token
+
+<Steps>
+  <Step title="Navigate to API Tokens">
+    Log in as an Admin and go to **Settings → API Tokens**.
+  </Step>
+  <Step title="Create a token">
+    Click **Add Token**, enter a descriptive name, and optionally set an expiration date.
+  </Step>
+  <Step title="Copy the token value">
+    The token is shown only once at creation. Copy it and store it securely — it cannot be retrieved again after you close the dialog.
+  </Step>
+</Steps>
+
+## Using the token
+
+Include the token in every API request:
+
+```bash
+curl https://your-instance:3000/api/v1/proxy-hosts \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Token permissions
+
+All API tokens carry full Admin-level access. There are no scoped or read-only token types — treat every token as a high-privilege credential and rotate regularly.
+
+## Token expiration
+
+Tokens with an expiration date are automatically invalidated at that time. Expired tokens return `401 Unauthorized`. Create a new token to restore access.
+
+## Revoking a token
+
+Navigate to **Settings → API Tokens** and delete the token. Revocation is immediate — subsequent requests using the deleted token return `401 Unauthorized`.
+
+## Error responses
+
+| Status | Description |
+|---|---|
+| `401 Unauthorized` | Token is missing, invalid, or expired |
+| `403 Forbidden` | The operation requires a permission the token does not have |

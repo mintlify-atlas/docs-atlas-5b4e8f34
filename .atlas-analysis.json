@@ -1,0 +1,120 @@
+{
+  "projectType": "saas",
+  "projectName": "Caddy Proxy Manager",
+  "projectDescription": "A modern web interface for Caddy Server providing reverse proxying, automatic HTTPS, WAF protection, mTLS, geo blocking, L4 TCP/UDP proxying, traffic analytics, and a full REST API — all managed through a single dashboard.",
+  "theme": "aspen",
+  "primaryColor": "#0ea5e9",
+  "lightColor": "#e0f2fe",
+  "darkColor": "#0369a1",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "configuration"
+            ]
+          },
+          {
+            "group": "Proxy Management",
+            "pages": [
+              "guides/proxy-hosts",
+              "guides/l4-proxy-hosts",
+              "guides/location-rules",
+              "guides/load-balancing"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "guides/certificates",
+              "guides/mtls",
+              "guides/waf",
+              "guides/geo-blocking",
+              "guides/access-lists"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "guides/forward-auth",
+              "guides/oauth-sso",
+              "guides/user-management"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "guides/analytics",
+              "guides/instance-sync",
+              "guides/audit-log",
+              "guides/settings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/authentication"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "api-reference/proxy-hosts",
+              "api-reference/l4-proxy-hosts",
+              "api-reference/certificates",
+              "api-reference/access-lists",
+              "api-reference/users-and-groups"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Reverse proxy management with load balancing (8 policies), health checks, and enable/disable toggle",
+    "L4 TCP/UDP stream proxying with TLS SNI matching and proxy protocol support",
+    "Automatic HTTPS via Caddy ACME (Let's Encrypt / ZeroSSL) with DNS-01 challenge for 12+ providers",
+    "Mutual TLS (mTLS) with built-in CA for issuing, tracking, and revoking client certificates",
+    "Web Application Firewall powered by Coraza with OWASP Core Rule Set (SQLi, XSS, LFI, RCE)",
+    "Geo blocking by country, continent, ASN, CIDR range, or exact IP per proxy host",
+    "Built-in forward auth portal — protect apps without an external IdP",
+    "Traffic analytics via ClickHouse with live charts, country map, and WAF event log",
+    "Full REST API at /api/v1/ with Bearer token auth and OpenAPI 3.1.0 docs",
+    "Instance sync for master/slave multi-instance deployments",
+    "OAuth2/OIDC SSO support (Authentik, Keycloak, Auth0, and more)",
+    "Complete audit trail with user attribution for all configuration changes"
+  ],
+  "publicApiSurface": [
+    "GET/POST /api/v1/proxy-hosts",
+    "GET/PUT/DELETE /api/v1/proxy-hosts/{id}",
+    "GET/POST /api/v1/l4-proxy-hosts",
+    "GET/PUT/DELETE /api/v1/l4-proxy-hosts/{id}",
+    "GET/POST /api/v1/certificates",
+    "GET/PUT/DELETE /api/v1/certificates/{id}",
+    "GET/POST /api/v1/ca-certificates",
+    "GET/POST /api/v1/client-certificates",
+    "GET/POST /api/v1/access-lists",
+    "GET/PUT/DELETE /api/v1/access-lists/{id}",
+    "GET/POST /api/v1/users",
+    "GET/PUT/DELETE /api/v1/users/{id}",
+    "GET/POST /api/v1/groups",
+    "GET/POST /api/v1/tokens",
+    "GET/POST /api/v1/dns-providers",
+    "GET/POST /api/v1/mtls-roles",
+    "GET/POST /api/v1/oauth-providers",
+    "GET /api/v1/audit-log",
+    "GET/POST /api/v1/instances",
+    "GET/PUT /api/v1/settings"
+  ]
+}

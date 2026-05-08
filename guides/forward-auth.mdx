@@ -1,0 +1,73 @@
+---
+title: "Built-in forward auth portal to protect any proxy host"
+description: "Use CPM's built-in forward auth portal to protect proxy hosts with login-based authentication — no external identity provider required."
+---
+
+Caddy Proxy Manager includes a built-in forward authentication portal. Instead of installing a separate identity provider like Authentik or Authelia, CPM acts as the IdP: it presents a login page, issues session cookies, and Caddy validates each subsequent request through the `forward_auth` directive.
+
+## How forward auth works
+
+1. A visitor hits a protected proxy host without a valid session cookie.
+2. Caddy's `forward_auth` directive sends the request to CPM for validation.
+3. CPM redirects the visitor to the CPM login page.
+4. After login, CPM sets a session cookie and redirects back to the original URL.
+5. Caddy validates all future requests from that browser through CPM until the session expires.
+
+## Enabling forward auth on a proxy host
+
+<Steps>
+  <Step title="Edit the proxy host">
+    Open the proxy host you want to protect and go to the **Forward Auth** tab.
+  </Step>
+  <Step title="Enable CPM forward auth">
+    Toggle **Enable Forward Auth** on.
+  </Step>
+  <Step title="Grant access to users or groups">
+    Add the users or groups that are allowed to access this host. Only explicitly listed users and groups may log in — even admins must be added.
+  </Step>
+  <Step title="Configure path scope (optional)">
+    Set **protected_paths** to apply auth only to specific URL paths, or add **excluded_paths** to bypass auth for public assets like `/static/*` or `/health`.
+  </Step>
+</Steps>
+
+## Path-based access control
+
+The `CpmForwardAuthConfig` type exposes two path arrays:
+
+| Field | Description |
+|---|---|
+| `protected_paths` | Only these paths require authentication (null = all paths) |
+| `excluded_paths` | These paths bypass authentication entirely |
+
+**Example:** Protect all paths except the health check endpoint:
+- `excluded_paths`: `/health`, `/favicon.ico`
+
+## User and group access
+
+Forward auth access is separate from the user's dashboard role. A user with the **Viewer** role can still access a forward-auth-protected app if they are explicitly granted access.
+
+Grant access by:
+- **Individual user:** Add the user to the host's access list.
+- **Group:** Add a group — all current and future members of the group gain access automatically.
+
+## Managing groups
+
+Navigate to **Groups** in the sidebar to create and manage groups. Assign users to groups from the group detail page. When you grant a group access to a proxy host, membership changes take effect immediately.
+
+## Authentik integration
+
+If you already run Authentik, CPM can use it as the forward auth provider instead of the built-in portal. Enable **Authentik** on the proxy host's **Forward Auth** tab and configure:
+
+| Field | Description |
+|---|---|
+| `outpostDomain` | Your Authentik outpost domain |
+| `outpostUpstream` | Upstream address of the Authentik outpost |
+| `authEndpoint` | Auth validation endpoint (auto-derived from `outpostDomain` if omitted) |
+| `copyHeaders` | Headers to copy from Authentik's response to the upstream |
+| `trustedProxies` | Trusted proxy ranges for correct IP detection |
+| `protectedPaths` | Paths to protect (null = all) |
+| `excludedPaths` | Paths to bypass |
+
+<Note>
+The Authentik outpost URL and CPM's `BASE_URL` must be reachable from inside the Docker network.
+</Note>

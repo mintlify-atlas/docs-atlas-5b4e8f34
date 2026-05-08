@@ -1,0 +1,66 @@
+---
+title: "User management, roles, and groups in Caddy Proxy Manager"
+description: "Manage CPM users: edit roles, disable or delete accounts, and organize users into groups for forward auth access control. CPM has three built-in roles."
+---
+
+Caddy Proxy Manager has a built-in user system with three roles, admin-managed accounts, and group membership for forward auth access control. The initial admin account is seeded from the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables on first start.
+
+## User roles
+
+CPM has three roles with increasing privileges:
+
+| Capability | Viewer | User | Admin |
+|---|:---:|:---:|:---:|
+| Log in to the dashboard | Yes | Yes | Yes |
+| View own profile | Yes | Yes | Yes |
+| Access forward-auth-protected apps (when granted) | Yes | Yes | Yes |
+| Manage proxy hosts, certificates, access lists | No | No | Yes |
+| Manage users, groups, and settings | No | No | Yes |
+| View analytics, audit log, and API docs | No | No | Yes |
+| Create and manage API tokens | No | No | Yes |
+| Access the REST API (`/api/v1/`) | No | No | Yes |
+
+New users who register or are provisioned via OAuth receive the **user** role by default. Promote users to **Admin** from the Users page.
+
+## Managing users
+
+Navigate to **Users** in the sidebar to:
+
+- **Edit role:** Change a user's role between Viewer, User, and Admin.
+- **Enable/disable:** Suspend a user's access without deleting their account. Disabling a user immediately revokes all active forward auth sessions.
+- **Delete:** Permanently remove a user and their data.
+- **Search and filter:** Find users by name or email.
+
+## API tokens
+
+Admins can create API tokens under **Settings → API Tokens**. Each token:
+
+- Authenticates as the creating admin for all REST API calls
+- Can have an optional expiration date
+- Is shown only once at creation — treat it as a secret
+
+Use tokens for automation, CI/CD pipelines, and programmatic configuration management.
+
+## Groups
+
+Groups organize users for forward auth access control.
+
+<Steps>
+  <Step title="Create a group">
+    Navigate to **Groups** and click **Add Group**. Give it a name and an optional description.
+  </Step>
+  <Step title="Add members">
+    Open the group and add users. Members can also be removed individually.
+  </Step>
+  <Step title="Assign to proxy hosts">
+    On any forward-auth-enabled proxy host, add the group to the access list. All current and future group members gain access automatically.
+  </Step>
+</Steps>
+
+<Note>
+Forward auth access is independent of the user's role. Even an Admin must be explicitly added to a forward-auth host's access list to access the protected application.
+</Note>
+
+## Profile and account linking
+
+Users can update their display name and profile picture from their profile page, and link or unlink OAuth providers under **Profile → Connected Accounts**. Each user manages their own linked providers — admins cannot manage OAuth links on behalf of other users.

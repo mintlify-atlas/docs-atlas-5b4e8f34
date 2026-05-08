@@ -1,0 +1,71 @@
+---
+title: "Mutual TLS (mTLS) with built-in CA and RBAC"
+description: "Secure proxy hosts with mutual TLS using CPM's built-in CA. Issue and revoke client certificates and enforce path-based access control with mTLS RBAC roles."
+---
+
+Caddy Proxy Manager includes a built-in Certificate Authority for issuing client certificates used in mutual TLS (mTLS) authentication. You can require clients to present a valid certificate before Caddy forwards the request to your upstream, with optional role-based path rules.
+
+## How mTLS works in CPM
+
+When mTLS is enabled on a proxy host, Caddy requests a client certificate during the TLS handshake. CPM's built-in CA issues these certificates, and Caddy validates each client cert against the CA. Connections from clients without a trusted certificate are rejected at the TLS layer — before any application logic runs.
+
+## Setting up the built-in CA
+
+The built-in CA is created automatically on first startup. Navigate to **Certificates → CA Certificates** to view the CA and download the root certificate for distribution to clients.
+
+## Issuing client certificates
+
+<Steps>
+  <Step title="Open Client Certificates">
+    Navigate to **Certificates → Client Certificates** and click **Issue Certificate**.
+  </Step>
+  <Step title="Fill certificate details">
+    Enter a name and optional expiry date. CPM generates the key pair server-side.
+  </Step>
+  <Step title="Download the bundle">
+    After creation, download the certificate and private key bundle. Store it securely — the private key cannot be retrieved again.
+  </Step>
+</Steps>
+
+## Enabling mTLS on a proxy host
+
+<Steps>
+  <Step title="Edit a proxy host">
+    Open the proxy host and navigate to the **mTLS** tab.
+  </Step>
+  <Step title="Enable mTLS">
+    Toggle mTLS on and select which client certificates or roles are trusted.
+  </Step>
+  <Step title="Configure path scope (optional)">
+    Set **protected_paths** to restrict mTLS to specific URL paths, or **excluded_paths** to exempt certain paths from the requirement.
+  </Step>
+</Steps>
+
+## mTLS configuration options
+
+The `MtlsConfig` type on each proxy host supports the following fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Enable or disable mTLS for this host |
+| `trusted_client_cert_ids` | `number[]` | Specific issued client certificate IDs to trust |
+| `trusted_role_ids` | `number[]` | Trust all certificates belonging to these mTLS roles |
+| `protected_paths` | `string[] \| null` | Paths that require a client certificate (null = all paths) |
+| `excluded_paths` | `string[] \| null` | Paths excluded from the mTLS requirement |
+
+## mTLS RBAC roles
+
+Roles let you group client certificates and apply path-based access rules:
+
+1. Navigate to **Certificates → mTLS Roles** and create a role (e.g., `ops`, `read-only`).
+2. Assign issued client certificates to the role.
+3. On a proxy host's mTLS tab, select the role under **Trusted Roles**.
+4. Optionally set `protected_paths` such as `/admin/*` to require the role only on sensitive paths.
+
+## Revoking client certificates
+
+Navigate to **Certificates → Client Certificates**, find the certificate, and click **Revoke**.
+
+<Warning>
+If all client certificates for a host are revoked, all mTLS connections to that host are rejected. This is intentional fail-closed behavior — restore at least one valid certificate to re-enable access.
+</Warning>

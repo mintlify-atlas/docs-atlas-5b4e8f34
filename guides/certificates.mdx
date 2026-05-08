@@ -1,0 +1,105 @@
+---
+title: "SSL/TLS certificate management and automatic HTTPS"
+description: "Automatic ACME certificates from Let's Encrypt or ZeroSSL, DNS-01 challenge for wildcards with 12 supported DNS providers, and custom PEM import."
+---
+
+Caddy Proxy Manager handles TLS certificates through three complementary mechanisms: automatic ACME certificates obtained without any configuration, DNS-01 challenge certificates for wildcard domains and non-public environments, and imported custom certificates for cases where you supply your own PEM files. All certificate state is stored in SQLite and applied live to the Caddy configuration without a restart.
+
+## Automatic HTTPS with ACME
+
+Caddy automatically obtains a TLS certificate from Let's Encrypt (or ZeroSSL) for every proxy host. When you create a proxy host and leave the **Certificate** field empty, Caddy uses the HTTP-01 ACME challenge: it briefly serves a token at `/.well-known/acme-challenge/` on port 80, the CA validates it, and the certificate is issued and renewed automatically.
+
+No configuration is needed for this to work. The only requirement is that your domain resolves publicly to your server and port 80 is reachable from the internet. Auto-renewal happens in the background well before expiry.
+
+To use a specific ACME email address for expiry notifications from Let's Encrypt, configure it in **Settings → ACME email** (see [ACME email configuration](#acme-email-configuration) below).
+
+## DNS-01 challenge for wildcard certificates
+
+The DNS-01 challenge proves domain ownership by creating a TXT record in your DNS zone rather than serving a file over HTTP. This makes it the right choice when:
+
+- You need a **wildcard certificate** (e.g. `*.example.com`) — Let's Encrypt only issues wildcards via DNS-01.
+- Your server is in a **private or internal environment** where ports 80 and 443 are not reachable from the internet.
+- You want to decouple certificate issuance from incoming traffic.
+
+When a DNS provider is configured, Caddy uses the DNS-01 challenge automatically for any certificate that requires it.
+
+### Supported DNS providers
+
+CPM includes built-in support for 12 DNS providers. Credential fields marked as `password` type in the `DnsProviderDefinition` are encrypted at rest using AES-256-GCM before being stored in the database.
+
+| Provider | Module |
+|----------|--------|
+| Cloudflare | `github.com/caddy-dns/cloudflare` |
+| Amazon Route 53 | `github.com/caddy-dns/route53` |
+| DigitalOcean | `github.com/caddy-dns/digitalocean` |
+| Duck DNS | `github.com/caddy-dns/duckdns` |
+| Hetzner | `github.com/caddy-dns/hetzner` |
+| Vultr | `github.com/caddy-dns/vultr` |
+| Porkbun | `github.com/caddy-dns/porkbun` |
+| GoDaddy | `github.com/caddy-dns/godaddy` |
+| Namecheap | `github.com/caddy-dns/namecheap` |
+| OVH | `github.com/caddy-dns/ovh` |
+| IONOS | `github.com/caddy-dns/ionos` |
+| Linode (Akamai) | `github.com/caddy-dns/linode` |
+
+Route 53 supports IAM roles: if you leave the `access_key_id` and `secret_access_key` fields empty, Caddy uses the instance's IAM role credentials automatically.
+
+### Configuring a DNS provider
+
+<Steps>
+  <Step title="Open DNS Providers settings">
+    Navigate to **Settings → DNS Providers** and click **Add Provider**.
+  </Step>
+  <Step title="Select a provider and enter credentials">
+    Choose your DNS provider from the list. Fill in the required credential fields. Password-type fields (API tokens, secrets) are encrypted before storage.
+  </Step>
+  <Step title="Set as default (optional)">
+    Mark the provider as the default to use it for all new certificates automatically.
+  </Step>
+  <Step title="Override per certificate (optional)">
+    On any individual certificate, you can select a different DNS provider in the **Provider** field. This overrides the global default for that certificate only — useful when you manage domains across multiple DNS registrars.
+  </Step>
+</Steps>
+
+## Importing custom certificates
+
+If you have your own certificate and private key (e.g. from an internal CA or a purchased certificate), you can import them through the Certificates page.
+
+<Steps>
+  <Step title="Open the Certificates page">
+    Navigate to **Certificates** in the sidebar and click **Import Certificate**.
+  </Step>
+  <Step title="Paste the PEM data">
+    Paste your certificate PEM into the **Certificate** field and your private key PEM into the **Private Key** field. Both fields are required for imported certificates (`CertificateType = "imported"`).
+  </Step>
+  <Step title="Set the domain names">
+    Enter the domain name(s) this certificate covers. These must match what's encoded in the certificate's Subject Alternative Names.
+  </Step>
+  <Step title="Save and assign">
+    Save the certificate, then assign it to a proxy host by selecting it from the **Certificate** dropdown on the proxy host edit form.
+  </Step>
+</Steps>
+
+<Warning>
+  Private keys for imported certificates are stored unencrypted in the SQLite database file. Ensure your database file (`caddy-proxy-manager.db`) is stored on a volume with appropriate filesystem permissions and is not accessible to untrusted processes.
+</Warning>
+
+## Certificate expiry monitoring
+
+The Certificates page shows the status of every certificate CPM knows about, including its domain names and expiry date. ACME-managed certificates (`CertificateType = "managed"`) with `autoRenew: true` are renewed automatically by Caddy before they expire. Imported certificates are not auto-renewed — you must replace them manually before the expiry date shown.
+
+You can view expiry status at a glance from the certificate list. Click any certificate to see its full details, including the list of domain names and the `validTo` timestamp.
+
+## Built-in CA for mTLS
+
+CPM includes a built-in certificate authority for issuing internal client certificates used in mutual TLS (mTLS). The built-in CA is separate from the ACME certificates described above — it is used to authenticate clients connecting to your proxy hosts, not to secure the connection to the browser.
+
+See the [mTLS guide](/guides/mtls) for full details on issuing, assigning, and revoking client certificates.
+
+## ACME email configuration
+
+Let's Encrypt and other ACME CAs use an email address to send expiry warning notifications. Configure this address in **Settings → ACME email**. The email is associated with your ACME account and is passed to the CA when requesting certificates.
+
+<Note>
+  The ACME email is required by Let's Encrypt's terms of service and is used only for expiry notifications. It does not affect certificate issuance.
+</Note>

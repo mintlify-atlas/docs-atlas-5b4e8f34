@@ -1,0 +1,70 @@
+---
+title: "REST API overview for Caddy Proxy Manager"
+description: "Full REST API at /api/v1/ with Bearer token auth. Interactive OpenAPI 3.1.0 docs available at /api-docs on your running Caddy Proxy Manager instance."
+---
+
+Caddy Proxy Manager provides a complete REST API at `/api/v1/` covering every resource available in the dashboard. All endpoints require Bearer token authentication. An interactive OpenAPI 3.1.0 specification is available at `/api-docs` on your running instance — use it to explore and test endpoints directly in your browser.
+
+## Base URL
+
+```
+http://your-instance:3000/api/v1
+```
+
+Replace `your-instance:3000` with your `BASE_URL` value.
+
+## Authentication
+
+All requests require a Bearer token in the `Authorization` header:
+
+```bash
+Authorization: Bearer YOUR_TOKEN
+```
+
+See [API Authentication](/api-reference/authentication) for how to create and use tokens.
+
+## Available resources
+
+| Resource | Base path | Description |
+|---|---|---|
+| Proxy Hosts | `/api/v1/proxy-hosts` | HTTP/HTTPS reverse proxy hosts |
+| L4 Proxy Hosts | `/api/v1/l4-proxy-hosts` | TCP/UDP stream proxy hosts |
+| Certificates | `/api/v1/certificates` | TLS certificates and ACME management |
+| CA Certificates | `/api/v1/ca-certificates` | Built-in CA certificate management |
+| Client Certificates | `/api/v1/client-certificates` | mTLS client certificate issuance |
+| Access Lists | `/api/v1/access-lists` | HTTP basic auth access lists |
+| DNS Providers | `/api/v1/dns-providers` | DNS-01 challenge provider credentials |
+| Groups | `/api/v1/groups` | User groups for forward auth |
+| Instances | `/api/v1/instances` | Instance sync slave configuration |
+| mTLS Roles | `/api/v1/mtls-roles` | mTLS RBAC role management |
+| OAuth Providers | `/api/v1/oauth-providers` | OAuth2/OIDC provider configuration |
+| Settings | `/api/v1/settings` | Global application settings |
+| API Tokens | `/api/v1/tokens` | API token management |
+| Users | `/api/v1/users` | User account management |
+| Audit Log | `/api/v1/audit-log` | Read-only audit log |
+
+## Response format
+
+All responses are JSON. Successful responses use HTTP 200 or 201. Errors return a JSON object with an `error` field:
+
+```json
+{
+  "error": "Not found"
+}
+```
+
+## Common HTTP status codes
+
+| Code | Meaning |
+|---|---|
+| `200` | Success |
+| `201` | Created |
+| `400` | Bad request — invalid input |
+| `401` | Unauthorized — missing or invalid token |
+| `403` | Forbidden — insufficient permissions |
+| `404` | Not found |
+| `500` | Internal server error |
+
+## Interactive OpenAPI docs
+
+Your running CPM instance serves an interactive OpenAPI 3.1.0 specification at `/api-docs`. The spec covers all endpoints, request/response schemas, and lets you send test requests directly from the browser using your API token.

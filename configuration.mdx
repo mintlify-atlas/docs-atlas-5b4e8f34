@@ -1,0 +1,243 @@
+---
+title: "Environment variables and Docker Compose configuration"
+description: "Complete reference for all Caddy Proxy Manager environment variables, Docker Compose profiles, and volume configuration for production deployments."
+---
+
+Caddy Proxy Manager is configured entirely through environment variables passed to the Docker Compose stack. This page lists every supported variable, explains the available Docker Compose profiles for optional services, and documents the volumes used to persist data across container restarts.
+
+## Required variables
+
+<Warning>
+  These variables must be set before starting the stack. The `web` container will refuse to start if `SESSION_SECRET`, `ADMIN_USERNAME`, or `ADMIN_PASSWORD` are missing or empty.
+</Warning>
+
+<ParamField body="SESSION_SECRET" type="string" required>
+  Secret key used to encrypt session cookies. Must be at least 32 characters in production.
+
+  Generate a suitable value with:
+
+  ```bash
+  openssl rand -base64 32
+  ```
+</ParamField>
+
+<ParamField body="ADMIN_USERNAME" type="string" required>
+  Username for the initial admin account created on first start. Defaults to `admin` in the example file.
+</ParamField>
+
+<ParamField body="ADMIN_PASSWORD" type="string" required>
+  Password for the initial admin account. In production, must be 12 or more characters with at least one uppercase letter, one lowercase letter, one number, and one special character.
+
+  Default `admin` credentials are only permitted when `NODE_ENV=development`.
+</ParamField>
+
+## Application settings
+
+<ParamField body="BASE_URL" type="string" default="http://localhost:3000">
+  Public URL where users access the dashboard, without a trailing slash. Required for OAuth — must exactly match the redirect URI registered in your OAuth provider.
+
+  Examples: `http://localhost:3000`, `https://caddy-manager.example.com`
+</ParamField>
+
+<ParamField body="CADDY_API_URL" type="string" default="http://caddy:2019">
+  Internal URL of Caddy's Admin API. The default (`http://caddy:2019`) works correctly inside the Docker Compose network. Change this only if you run Caddy outside the default stack.
+</ParamField>
+
+<ParamField body="DATABASE_URL" type="string" default="file:/app/data/caddy-proxy-manager.db">
+  SQLite connection URL. The database file is stored in the `caddy-manager-data` volume at `/app/data` inside the container. Changing this path is not recommended unless you are using a custom volume mount.
+</ParamField>
+
+<ParamField body="CERTS_DIRECTORY" type="string" default="./data/certs">
+  Directory where manually imported certificate files are stored. This path is relative to the application working directory inside the container.
+</ParamField>
+
+## Authentication settings
+
+<ParamField body="LOGIN_MAX_ATTEMPTS" type="number" default="5">
+  Maximum number of failed login attempts allowed within the `LOGIN_WINDOW_MS` window before the account is temporarily blocked.
+</ParamField>
+
+<ParamField body="LOGIN_WINDOW_MS" type="number" default="300000">
+  Duration of the login rate-limit window in milliseconds. Default is 5 minutes (300,000 ms).
+</ParamField>
+
+<ParamField body="LOGIN_BLOCK_MS" type="number" default="900000">
+  Duration of the login block in milliseconds after `LOGIN_MAX_ATTEMPTS` is exceeded. Default is 15 minutes (900,000 ms).
+</ParamField>
+
+<ParamField body="AUTH_TRUST_HOST" type="boolean" default="false">
+  Trust the `Host` header for URL construction. Enable only when CPM is running behind a reverse proxy that rewrites the `Host` header to the correct public hostname.
+</ParamField>
+
+<ParamField body="AUTH_RATE_LIMIT_ENABLED" type="boolean" default="true">
+  Enable Better Auth's built-in rate limiting for all authentication endpoints.
+</ParamField>
+
+<ParamField body="AUTH_RATE_LIMIT_WINDOW" type="number" default="60">
+  Better Auth rate-limit window in seconds.
+</ParamField>
+
+<ParamField body="AUTH_RATE_LIMIT_MAX" type="number" default="5">
+  Maximum number of authentication requests allowed within `AUTH_RATE_LIMIT_WINDOW` seconds.
+</ParamField>
+
+## OAuth2/OIDC settings
+
+<ParamField body="OAUTH_ENABLED" type="boolean" default="false">
+  Enable OAuth2/OIDC authentication. When `true`, an OAuth login button appears on the login page alongside the credential form.
+</ParamField>
+
+<ParamField body="OAUTH_PROVIDER_NAME" type="string" default="OAuth2">
+  Display name for the OAuth provider shown on the login button (e.g. `Authentik`, `Keycloak`).
+</ParamField>
+
+<ParamField body="OAUTH_CLIENT_ID" type="string">
+  OAuth2 client ID issued by your identity provider.
+</ParamField>
+
+<ParamField body="OAUTH_CLIENT_SECRET" type="string">
+  OAuth2 client secret issued by your identity provider.
+</ParamField>
+
+<ParamField body="OAUTH_ISSUER" type="string">
+  OIDC issuer URL used for automatic endpoint discovery. CPM fetches `{OAUTH_ISSUER}/.well-known/openid-configuration` to discover the authorization, token, and userinfo endpoints.
+
+  Example: `https://auth.example.com/application/o/caddy-proxy/`
+</ParamField>
+
+<ParamField body="OAUTH_AUTHORIZATION_URL" type="string">
+  Override the auto-discovered OAuth authorization endpoint. Leave empty to use OIDC discovery from `OAUTH_ISSUER`.
+</ParamField>
+
+<ParamField body="OAUTH_TOKEN_URL" type="string">
+  Override the auto-discovered OAuth token endpoint. Leave empty to use OIDC discovery from `OAUTH_ISSUER`.
+</ParamField>
+
+<ParamField body="OAUTH_USERINFO_URL" type="string">
+  Override the auto-discovered OAuth userinfo endpoint. Leave empty to use OIDC discovery from `OAUTH_ISSUER`.
+</ParamField>
+
+<ParamField body="OAUTH_ALLOW_AUTO_LINKING" type="boolean" default="false">
+  Automatically link an OAuth identity to an existing CPM account with the same email address, even if the account has no password. Enable with caution — only if you trust your OAuth provider to verify email addresses.
+</ParamField>
+
+## Analytics (ClickHouse)
+
+These variables are only relevant when the `clickhouse` Docker Compose profile is active.
+
+<ParamField body="CLICKHOUSE_URL" type="string" default="http://clickhouse:8123">
+  ClickHouse HTTP endpoint. The default works inside the Docker Compose network. Change this if you use an external ClickHouse instance.
+</ParamField>
+
+<ParamField body="CLICKHOUSE_USER" type="string" default="cpm">
+  ClickHouse username.
+</ParamField>
+
+<ParamField body="CLICKHOUSE_PASSWORD" type="string">
+  ClickHouse password. Required when the `clickhouse` profile is active — the `clickhouse` container will not start without it.
+
+  Generate a secure value with:
+
+  ```bash
+  openssl rand -base64 32
+  ```
+</ParamField>
+
+<ParamField body="CLICKHOUSE_DB" type="string" default="analytics">
+  ClickHouse database name where traffic and WAF events are stored.
+</ParamField>
+
+## Instance sync
+
+Instance sync allows a master CPM instance to push proxy host, certificate, access list, and settings configuration to one or more slave instances on every change. User accounts are not synced.
+
+<ParamField body="INSTANCE_MODE" type="string" default="standalone">
+  Instance role. Accepted values: `standalone`, `master`, `slave`.
+</ParamField>
+
+<ParamField body="INSTANCE_SYNC_TOKEN" type="string">
+  Bearer token that slave instances use to authenticate incoming sync requests from the master. Required on slave instances. Must be at least 32 characters.
+</ParamField>
+
+<ParamField body="INSTANCE_SLAVES" type="string">
+  JSON array of slave instance descriptors. Required on the master. Each object has `name`, `url`, and `token` fields.
+
+  Example:
+
+  ```json
+  [{"name":"replica","url":"https://replica.example.com","token":"<32-char-token>"}]
+  ```
+</ParamField>
+
+<ParamField body="INSTANCE_SYNC_INTERVAL" type="number" default="0">
+  Periodic sync interval in seconds. Set to `0` to disable periodic sync and rely only on change-triggered pushes.
+</ParamField>
+
+<ParamField body="INSTANCE_SYNC_ALLOW_HTTP" type="boolean" default="false">
+  Allow sync over HTTP. Enable only for slave URLs on internal Docker networks. Use HTTPS slave URLs in production.
+</ParamField>
+
+## Docker Compose profiles
+
+Profiles activate optional services without modifying the `docker-compose.yml` file. Set the `COMPOSE_PROFILES` variable in your `.env` file.
+
+<AccordionGroup>
+  <Accordion title="clickhouse — traffic and WAF analytics">
+    Starts the `clickhouse` container (ClickHouse `latest-alpine` image). Traffic events and WAF events are written to ClickHouse and retained for 90 days via TTL. The Analytics page in the dashboard is fully functional only when this profile is active.
+
+    Requires `CLICKHOUSE_PASSWORD` to be set. The container will not start without it.
+
+    ```env
+    COMPOSE_PROFILES=clickhouse
+    CLICKHOUSE_PASSWORD=your-clickhouse-password
+    ```
+  </Accordion>
+  <Accordion title="geoipupdate — automatic GeoLite2 database updates">
+    Starts the `geoipupdate` container (official MaxMind image). Downloads GeoLite2 Country, City, and ASN databases and refreshes them every 72 hours. The databases are stored in the `geoip-data` volume and are shared with the `web` and `caddy` containers.
+
+    Required for geo blocking rules to function. Requires a free MaxMind account and license key.
+
+    ```env
+    COMPOSE_PROFILES=geoipupdate
+    GEOIPUPDATE_ACCOUNT_ID=your-account-id
+    GEOIPUPDATE_LICENSE_KEY=your-license-key
+    ```
+  </Accordion>
+  <Accordion title="Combining profiles">
+    List multiple profiles as a comma-separated string to activate more than one optional service at the same time:
+
+    ```env
+    COMPOSE_PROFILES=clickhouse,geoipupdate
+    CLICKHOUSE_PASSWORD=your-clickhouse-password
+    GEOIPUPDATE_ACCOUNT_ID=your-account-id
+    GEOIPUPDATE_LICENSE_KEY=your-license-key
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Volumes
+
+All persistent data is stored in named Docker volumes. These volumes survive container restarts and upgrades.
+
+| Volume | Mounted in | Stores |
+|--------|------------|--------|
+| `caddy-manager-data` | `web`, `l4-port-manager` | SQLite database, imported certificate files, and application data |
+| `caddy-data` | `caddy` | Caddy's ACME certificate cache and storage (Let's Encrypt / ZeroSSL certs) |
+| `caddy-config` | `caddy` | Caddy runtime configuration state |
+| `caddy-logs` | `caddy` (write), `web` (read-only) | Caddy access logs consumed by the analytics pipeline |
+| `geoip-data` | `web` (read-only), `caddy` (read-only), `geoipupdate` (write) | MaxMind GeoLite2 Country, City, and ASN database files |
+| `clickhouse-data` | `clickhouse` | ClickHouse analytics data: traffic events and WAF events with 90-day TTL |
+
+<Note>
+  Back up `caddy-manager-data` and `caddy-data` regularly. `caddy-manager-data` contains your configuration database and `caddy-data` contains the ACME account keys and cached certificates.
+</Note>
+
+## Production security checklist
+
+<Check>Generate `SESSION_SECRET` with `openssl rand -base64 32` — do not use a short or guessable value.</Check>
+<Check>Set `ADMIN_PASSWORD` to 12 or more characters with uppercase, lowercase, numbers, and special characters.</Check>
+<Check>Set `BASE_URL` to your HTTPS public URL (e.g. `https://caddy-manager.example.com`), not `http://localhost:3000`.</Check>
+<Check>Run `chmod 600 .env` to prevent other users on the host from reading your credentials.</Check>
+<Check>Keep the Caddy Admin API (port 2019) on the internal Docker network only — do not expose it to the host.</Check>
+<Check>Use HTTPS URLs for `INSTANCE_SLAVES` in multi-instance deployments. Only set `INSTANCE_SYNC_ALLOW_HTTP=true` on internal-only networks.</Check>
+<Check>Generate `CLICKHOUSE_PASSWORD` with `openssl rand -base64 32` if you enable the `clickhouse` profile.</Check>

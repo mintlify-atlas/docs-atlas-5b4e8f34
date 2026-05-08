@@ -1,0 +1,58 @@
+---
+title: "HTTP basic auth access lists for proxy hosts"
+description: "Protect proxy hosts with HTTP basic authentication. Create access lists with multiple bcrypt-hashed user credentials and assign them to one or more proxy hosts."
+---
+
+Access lists add HTTP basic authentication to any proxy host. Each list holds one or more username/password pairs — useful for protecting internal tools, staging environments, or admin interfaces without setting up a full identity provider.
+
+## Creating an access list
+
+<Steps>
+  <Step title="Navigate to Access Lists">
+    Click **Access Lists** in the sidebar and then **Add Access List**.
+  </Step>
+  <Step title="Name the list">
+    Give the access list a descriptive name (e.g., `staging-team` or `internal-tools`). An optional `description` field is also available.
+  </Step>
+  <Step title="Add users">
+    Click **Add User** and enter a username and password. Repeat for each user. Passwords are stored as bcrypt hashes (cost factor 10) — never in plaintext.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The list is now available to assign to proxy hosts.
+  </Step>
+</Steps>
+
+## Assigning to a proxy host
+
+Open a proxy host, find the **Access List** dropdown in the main settings, and select your list. Save the proxy host — Caddy immediately enforces basic auth for that domain.
+
+One access list can be assigned to multiple proxy hosts. Updating the list (adding or removing users) applies to all assigned hosts instantly.
+
+## Data model
+
+The `AccessList` type has the following structure:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `number` | Unique access list identifier |
+| `name` | `string` | Display name |
+| `description` | `string \| null` | Optional description |
+| `entries` | `AccessListEntry[]` | List of user credentials (usernames only — password hashes are not returned by the API) |
+| `createdAt` | `string` | ISO 8601 creation timestamp |
+| `updatedAt` | `string` | ISO 8601 last-updated timestamp |
+
+Each `AccessListEntry` contains an `id`, `username`, `createdAt`, and `updatedAt`. Passwords are write-only — they are hashed on creation and the hash is never exposed.
+
+## Multiple users per list
+
+Each access list supports any number of username/password pairs. This lets different team members use individual credentials for the same protected site — making it easy to revoke access for one user without changing passwords for others.
+
+## Removing or updating access
+
+- **Remove a user:** Edit the access list and delete the user entry.
+- **Change a password:** Delete the old entry and add a new one with the updated password.
+- **Detach from a host:** Edit the proxy host and set the Access List field to none.
+
+<Note>
+Access lists use HTTP basic authentication, which is suitable for low-traffic internal tools. For applications requiring SSO, user groups, or per-path exclusions, use the [Forward Auth Portal](/guides/forward-auth) instead.
+</Note>

@@ -1,0 +1,60 @@
+---
+title: "Audit log: review all configuration change history"
+description: "Search and review every configuration change in the audit log — who changed what, and when. Paginated with full user attribution and server-side search."
+---
+
+Caddy Proxy Manager records every configuration change in a persistent audit log. Each entry captures the action performed, the resource affected, the user who made the change, and a timestamp. The audit log is append-only — entries cannot be modified or deleted through the dashboard.
+
+## Accessing the audit log
+
+Navigate to **Audit Log** in the sidebar. The log is visible only to users with the **Admin** role.
+
+## What's logged
+
+The audit log captures changes across all managed resources:
+
+- **Proxy hosts** — create, update, enable/disable, delete
+- **L4 proxy hosts** — create, update, enable/disable, delete
+- **Certificates** — create, import, delete
+- **Client certificates** — issue, revoke
+- **Access lists** — create, update, delete
+- **DNS providers** — create, update, delete
+- **Settings** — any settings change
+- **Users** — role change, enable/disable, delete
+- **Groups** — create, update, delete
+- **mTLS roles** — create, update, delete
+- **OAuth providers** — create, update, delete
+- **API tokens** — create, delete
+- **Instance sync configuration** — any sync config change
+
+## Searching the audit log
+
+Use the search bar to filter entries. The search is applied at the database level across three fields simultaneously:
+
+| Searchable field | Example values |
+|---|---|
+| Action | `create`, `update`, `delete` |
+| Resource type | `proxy_host`, `certificate`, `user` |
+| Summary | Human-readable description of what changed |
+
+Results are paginated with server-side filtering, so search stays fast even on large audit histories.
+
+## Audit entry details
+
+Each entry shows the following fields:
+
+| Field | Description |
+|---|---|
+| Timestamp | When the change occurred (UTC) |
+| User | Username or email of the user who made the change |
+| Action | Type of operation: `create`, `update`, `delete`, etc. |
+| Resource | The type of resource affected |
+| Summary | A short description of what changed |
+
+<Note>
+  System-initiated changes (such as certificate renewal or instance sync pushes) may appear with a null user if no authenticated session was involved.
+</Note>
+
+## Retention
+
+The audit log has no automatic expiry — entries are kept indefinitely. For long-running deployments, the SQLite database file grows over time with accumulated audit history. If storage is a concern, you can manage the database file directly by compacting or archiving it outside of the dashboard.

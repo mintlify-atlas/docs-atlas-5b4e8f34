@@ -1,0 +1,82 @@
+---
+title: "Geo blocking by country, continent, ASN, and IP"
+description: "Restrict traffic per proxy host by country, continent, ASN, CIDR, or exact IP. Allow rules override blocks. Requires MaxMind GeoLite2 databases."
+---
+
+Caddy Proxy Manager supports per-proxy-host geo blocking powered by MaxMind GeoLite2 databases. You can deny entire continents while allowing specific ASNs or IPs, set custom rejection responses, and configure fail-closed behavior for maximum security.
+
+## Prerequisites: GeoIP database setup
+
+Geo blocking requires the MaxMind GeoLite2 Country and ASN databases.
+
+<Steps>
+  <Step title="Create a MaxMind account">
+    Register for a free account at [maxmind.com](https://www.maxmind.com/) and generate a license key with `GeoLite2-Country` and `GeoLite2-ASN` permissions.
+  </Step>
+  <Step title="Add credentials to .env">
+    ```bash
+    GEOIPUPDATE_ACCOUNT_ID=your-account-id
+    GEOIPUPDATE_LICENSE_KEY=your-license-key
+    COMPOSE_PROFILES=geoipupdate
+    ```
+  </Step>
+  <Step title="Start the geoipupdate service">
+    ```bash
+    docker compose --profile geoipupdate up -d
+    ```
+    The databases are stored in the `geoip-data` volume and shared between the web and Caddy containers. Updates run every 72 hours automatically.
+  </Step>
+</Steps>
+
+## Rule types
+
+| Type | Example | Description |
+|---|---|---|
+| Country | `DE` | ISO 3166-1 alpha-2 country code |
+| Continent | `EU` | `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA` |
+| ASN | `24940` | Autonomous System Number |
+| CIDR | `91.98.150.0/24` | IP range in CIDR notation |
+| IP | `91.98.150.103` | Exact IP address |
+
+Each rule type maps to a field in the `GeoBlockSettings` type: `block_countries`, `block_continents`, `block_asns`, `block_cidrs`, `block_ips`, and their `allow_*` counterparts.
+
+## Block vs. allow rules
+
+Rules are either **block** or **allow**. Allow rules always take precedence over block rules — regardless of order. This lets you deny an entire continent and then whitelist specific IPs or ASNs through.
+
+**Example:** Add `EU` to `block_continents`, then add `24940` to `allow_asns` (Hetzner) — all Hetzner-hosted clients in Europe can still connect.
+
+## Configuring geo blocking on a proxy host
+
+<Steps>
+  <Step title="Open geo blocking settings">
+    Edit a proxy host and navigate to the **Geo Blocking** tab.
+  </Step>
+  <Step title="Add rules">
+    Click **Add Rule**, select the rule type, enter the value, and choose **Block** or **Allow**.
+  </Step>
+  <Step title="Set geo block mode">
+    Choose **Merge** (`GeoBlockMode: "merge"`) to combine these rules with the global `GeoBlockSettings`, or **Override** (`GeoBlockMode: "override"`) to use only per-host rules.
+  </Step>
+</Steps>
+
+## Fail-closed mode
+
+The `fail_closed` field on `GeoBlockSettings` controls what happens when the GeoIP lookup fails — for example, when the database is unavailable or the IP is unrecognized. When `fail_closed` is `true`, those requests are blocked. The default is `false` (fail-open), which allows traffic on GeoIP errors.
+
+Enable `fail_closed` when you need to guarantee that unresolvable IPs never reach your upstream.
+
+## Custom response codes and bodies
+
+The following `GeoBlockSettings` fields control the response sent to blocked clients:
+
+| Field | Type | Description |
+|---|---|---|
+| `response_status` | `number` | HTTP status code for blocked requests (default `403`) |
+| `response_body` | `string` | Response body text (default `"Forbidden"`) |
+| `response_headers` | `Record<string, string>` | Additional response headers |
+| `redirect_url` | `string` | If set, issue a `302` redirect instead of returning `response_status` / `response_body` |
+
+## Trusted proxy configuration
+
+If your CPM instance sits behind a load balancer or CDN, set `trusted_proxies` in `GeoBlockSettings` to the CIDR ranges or IPs of your proxies. This tells the geo blocking engine to read the real client IP from the `X-Forwarded-For` header rather than the connecting IP.

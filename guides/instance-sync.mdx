@@ -1,0 +1,89 @@
+---
+title: "Multi-instance sync for high availability deployments"
+description: "Set up master/slave instance sync to automatically push proxy hosts, certificates, access lists, and settings to replica instances on every change."
+---
+
+Caddy Proxy Manager supports a master/slave synchronization model for multi-instance deployments. The master pushes proxy hosts, certificates, access lists, and settings to one or more slave instances on every configuration change, keeping all nodes consistent without manual intervention. User accounts and API tokens are not synced — each instance maintains its own user database.
+
+## How instance sync works
+
+When a configuration change is saved on the master, CPM immediately sends the updated configuration to all registered slave instances over HTTPS. Each slave applies the change to its own Caddy instance. The sync is triggered on every save, so slaves stay up to date without polling.
+
+Optionally, you can configure a periodic full-sync interval to recover slaves that were temporarily offline.
+
+## Configuration
+
+### Master instance
+
+Set `INSTANCE_MODE=master` and provide a JSON array of slave definitions in `INSTANCE_SLAVES`. Each slave entry requires a display name, URL, and a bearer token.
+
+```bash .env
+INSTANCE_MODE=master
+INSTANCE_SLAVES='[{"name":"replica","url":"https://replica.example.com","token":"your-32-char-token"}]'
+```
+
+### Slave instance
+
+Set `INSTANCE_MODE=slave` and provide the token the master will use to authenticate sync requests.
+
+```bash .env
+INSTANCE_MODE=slave
+INSTANCE_SYNC_TOKEN=your-32-char-token
+```
+
+The `INSTANCE_SYNC_TOKEN` on the slave must match the `token` field in the master's `INSTANCE_SLAVES` entry for that slave.
+
+## Environment variable reference
+
+| Variable | Description | Default |
+|---|---|---|
+| `INSTANCE_MODE` | Role: `standalone`, `master`, or `slave` | `standalone` |
+| `INSTANCE_SYNC_TOKEN` | Bearer token slaves use to authenticate sync requests | — |
+| `INSTANCE_SLAVES` | JSON array of slave instances (master only) | — |
+| `INSTANCE_SYNC_INTERVAL` | Periodic full-sync interval in seconds (`0` = push-only) | `0` |
+| `INSTANCE_SYNC_ALLOW_HTTP` | Allow sync over HTTP for isolated internal Docker networks | `false` |
+
+## What gets synced
+
+| Resource | Synced |
+|---|---|
+| Proxy hosts | Yes |
+| L4 proxy hosts | Yes |
+| Certificates | Yes |
+| Access lists | Yes |
+| Settings | Yes |
+| User accounts | No |
+| API tokens | No |
+
+## Periodic sync
+
+Set `INSTANCE_SYNC_INTERVAL` to a positive number of seconds to trigger a full configuration push on a schedule, in addition to change-triggered pushes. This is useful for recovering slaves that were temporarily offline and missed one or more change events.
+
+```bash .env
+INSTANCE_SYNC_INTERVAL=300   # full sync every 5 minutes
+```
+
+## Multiple slaves
+
+The `INSTANCE_SLAVES` JSON array accepts multiple entries. Each slave can have its own bearer token.
+
+```bash .env
+INSTANCE_SLAVES='[
+  {"name":"replica-1","url":"https://r1.example.com","token":"token-for-r1"},
+  {"name":"replica-2","url":"https://r2.example.com","token":"token-for-r2"}
+]'
+```
+
+## Security recommendations
+
+<Warning>
+  Use HTTPS slave URLs in production. Set `INSTANCE_SYNC_ALLOW_HTTP=true` only for isolated internal Docker networks where TLS is not practical.
+</Warning>
+
+Generate a strong sync token for each slave:
+
+```bash
+openssl rand -base64 32
+```
+
+Use a different token per slave so that a compromised slave cannot authenticate as another.

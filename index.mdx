@@ -1,133 +1,68 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
-icon: 'star'
+title: "Caddy Proxy Manager: Modern Web UI for Caddy Server"
+description: "Manage reverse proxies, certificates, WAF, mTLS, geo blocking, and analytics through one unified dashboard — no Caddyfile editing required."
 ---
 
-## Setting up
+Caddy Proxy Manager gives you a powerful web interface for [Caddy Server](https://caddyserver.com/), eliminating manual configuration file editing. From reverse proxies and automatic HTTPS to a built-in Web Application Firewall and traffic analytics, everything is managed through a clean, responsive dashboard with a full REST API.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Deploy Caddy Proxy Manager with Docker Compose and set up your first proxy host in minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Configuration" icon="sliders" href="/configuration">
+    Explore all environment variables and Docker Compose profiles available for your deployment.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Authenticate with Bearer tokens and interact with the full REST API at /api/v1/.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Security" icon="shield-halved" href="/guides/waf">
+    WAF protection, geo blocking, mTLS with a built-in CA, and automatic HTTPS — all per host.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Core features
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Reverse Proxy Hosts" icon="network-wired" href="/guides/proxy-hosts">
+    Route HTTP/HTTPS traffic to any upstream with load balancing, health checks, and custom headers.
+  </Card>
+  <Card title="L4 TCP/UDP Proxying" icon="layer-group" href="/guides/l4-proxy-hosts">
+    Stream-proxy raw TCP and UDP traffic with TLS SNI matching and proxy protocol support.
+  </Card>
+  <Card title="Web Application Firewall" icon="shield" href="/guides/waf">
+    Block SQLi, XSS, LFI, and RCE attacks with Coraza and the OWASP Core Rule Set.
+  </Card>
+  <Card title="Geo Blocking" icon="earth-americas" href="/guides/geo-blocking">
+    Allow or deny traffic by country, continent, ASN, CIDR, or exact IP per proxy host.
+  </Card>
+  <Card title="Certificates & mTLS" icon="certificate" href="/guides/certificates">
+    Automatic ACME certificates, DNS-01 challenge support, and a built-in CA for client certs.
+  </Card>
+  <Card title="Forward Auth Portal" icon="lock" href="/guides/forward-auth">
+    Protect any proxied app with built-in identity management — no external IdP required.
+  </Card>
+  <Card title="Traffic Analytics" icon="chart-line" href="/guides/analytics">
+    Live traffic charts, country maps, top user agents, and WAF event logs powered by ClickHouse.
+  </Card>
+  <Card title="Instance Sync" icon="arrows-rotate" href="/guides/instance-sync">
+    Push configuration from a master to one or more slave instances on every change.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Get started in three steps
 
-## Make your content agent ready
+<Steps>
+  <Step title="Deploy with Docker Compose">
+    Clone the repository, copy `.env.example` to `.env`, fill in your credentials, and run `docker compose up -d`. The dashboard is available at `http://localhost:3000`.
+  </Step>
+  <Step title="Create your first proxy host">
+    Log in as admin, navigate to **Proxy Hosts**, and click **Add Proxy Host**. Enter your domain, upstream address, and enable SSL — Caddy obtains a Let's Encrypt certificate automatically.
+  </Step>
+  <Step title="Secure and monitor">
+    Enable the WAF, add geo blocking rules, and turn on ClickHouse analytics to gain full visibility into traffic and threats.
+  </Step>
+</Steps>
 
-Make your docs work for humans and AI agents alike.
-
-<Columns cols={2}>
-  <Card
-    title="Prompt component"
-    icon="robot"
-    href="/agent-ready/prompt"
-  >
-    Embed shareable AI prompts readers can copy or open in Cursor.
-  </Card>
-  <Card
-    title="Visibility"
-    icon="eye"
-    href="/agent-ready/visibility"
-  >
-    Show different content to humans and agents reading your docs.
-  </Card>
-  <Card
-    title="Contextual menu"
-    icon="bolt"
-    href="/agent-ready/contextual"
-  >
-    Give readers one-click access to Claude, ChatGPT, Cursor, and more.
-  </Card>
-  <Card
-    title="AI coding tools"
-    icon="wand-magic-sparkles"
-    href="/ai-tools/claude-code"
-  >
-    Set up Claude Code, Cursor, or Windsurf with Mintlify's skill.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Note>
+  Caddy Proxy Manager requires Docker and Docker Compose. See the [Quickstart](/quickstart) for the full setup guide.
+</Note>

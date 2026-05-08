@@ -1,0 +1,125 @@
+---
+title: "Configure reverse proxy hosts in Caddy Proxy Manager"
+description: "Create and manage reverse proxy hosts with custom domains, upstream targets, SSL, WebSocket support, custom headers, redirects, and path rewrites."
+---
+
+A proxy host tells Caddy how to accept requests for one or more domains and forward them to one or more upstream services. Each proxy host is a self-contained unit of configuration: it holds your domain names, upstream addresses, TLS settings, header options, redirect rules, path rewrites, and location rules. Changes to a proxy host take effect immediately — Caddy's configuration is updated live without a restart.
+
+## Creating a proxy host
+
+<Steps>
+  <Step title="Open the Proxy Hosts page">
+    Navigate to **Proxy Hosts** in the sidebar, then click **Add Proxy Host**.
+  </Step>
+  <Step title="Fill in the required fields">
+    Enter a **Name** (used for display only), at least one **Domain**, and at least one **Upstream** target. All other fields are optional.
+  </Step>
+  <Step title="Configure optional settings">
+    Expand the SSL, WebSocket, Redirects, Rewrites, and Location Rules sections as needed. See the sections below for details on each option.
+  </Step>
+  <Step title="Save the host">
+    Click **Save**. The Caddy configuration is updated immediately. If Caddy reports an error, the form shows the error message returned by the Caddy API.
+  </Step>
+</Steps>
+
+## Core settings
+
+| Field | Type | Description |
+|-------|------|-------------|
+| **Name** | string | Display label for this proxy host. Not used in routing. |
+| **Domains** | string[] | One or more hostnames Caddy listens on (e.g. `app.example.com`). Multiple domains share the same upstream and settings. |
+| **Upstreams** | string[] | One or more upstream addresses in `host:port` or `http://host:port` format. Add multiple upstreams to enable load balancing. |
+| **Certificate** | select | The TLS certificate to use. Leave empty to let Caddy obtain one automatically via ACME (Let's Encrypt / ZeroSSL). |
+| **Access List** | select | Attach an HTTP basic auth access list to restrict access to this host. |
+
+<Tip>
+  Add multiple upstream targets to enable load balancing. Configure the balancing policy and health checks in the **Load Balancer** section.
+</Tip>
+
+## SSL / TLS options
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sslForced` | boolean | Redirect all HTTP requests to HTTPS with a 301 redirect. |
+| `hstsEnabled` | boolean | Add a `Strict-Transport-Security` response header. Tells browsers to always use HTTPS for this domain. |
+| `hstsSubdomains` | boolean | Extend the HSTS policy to all subdomains via the `includeSubDomains` directive. Requires `hstsEnabled`. |
+| `skipHttpsHostnameValidation` | boolean | Skip TLS hostname verification when connecting to HTTPS upstreams. Use this when upstream certificates use a different hostname than the dial address (e.g. internal services with self-signed certs). |
+
+<Warning>
+  Enabling `skipHttpsHostnameValidation` reduces TLS security. Only use it for trusted internal upstreams where you control the certificates.
+</Warning>
+
+## WebSocket and header options
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `allowWebsocket` | boolean | Enable WebSocket proxying by adding `Connection` and `Upgrade` hop-by-hop headers. Required for any WebSocket application. |
+| `preserveHostHeader` | boolean | Forward the original `Host` header from the client to the upstream instead of replacing it with the upstream hostname. Required by applications that use the `Host` header for virtual hosting or redirect generation. |
+
+## Redirect rules
+
+Redirect rules (`RedirectRule[]`) let you permanently or temporarily redirect specific paths before the request reaches the upstream. Each rule has three fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `from` | string | The path pattern to match, e.g. `/.well-known/carddav`. |
+| `to` | string | The destination path or URL, e.g. `/remote.php/dav/`. |
+| `status` | 301 \| 302 \| 307 \| 308 | The HTTP redirect status code. |
+
+**Status code reference:**
+- `301` — Moved Permanently (caches the redirect in browsers)
+- `302` — Found / Temporary Redirect
+- `307` — Temporary Redirect (preserves request method)
+- `308` — Permanent Redirect (preserves request method)
+
+**Example** — redirect CardDAV discovery to Nextcloud's DAV endpoint:
+
+```json
+{
+  "from": "/.well-known/carddav",
+  "to": "/remote.php/dav/",
+  "status": 301
+}
+```
+
+You can add multiple redirect rules per host. Rules are evaluated in the order they appear.
+
+## Path rewrites
+
+A `RewriteConfig` strips a path prefix before forwarding the request to the upstream. This is useful when the upstream serves content at `/` but you want to expose it at a sub-path on your domain.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `path_prefix` | string | The prefix to strip from the request path, e.g. `/recipes`. |
+
+**Example use case:** you serve a recipe app upstream at `recipes-app:3000` (root path `/`), but want it accessible at `https://home.example.com/recipes`. Set `path_prefix` to `/recipes` so a request for `/recipes/chicken-soup` is forwarded to the upstream as `/chicken-soup`.
+
+## Location rules (path-based routing)
+
+Location rules (`LocationRule[]`) route different URL paths to different upstream targets within a single proxy host. Each rule maps a path pattern to one or more upstreams.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `path` | string | A Caddy path pattern, e.g. `/api/*`, `/ws/*`. |
+| `upstreams` | string[] | One or more upstream addresses that handle requests matching this path. |
+
+Location rules are evaluated before the default upstream. See the [location rules guide](/guides/location-rules) for pattern syntax, rule ordering, and worked examples.
+
+## Enable and disable hosts
+
+Every proxy host has an `enabled` toggle. When disabled, the host is removed from the live Caddy configuration — Caddy stops routing traffic to it immediately. The host record and all its settings are preserved in the database. Re-enabling the host restores it to the Caddy config instantly.
+
+Use the toggle in the host list row or on the edit form. The Proxy Hosts table shows the current enabled/disabled state for each host.
+
+## Custom Caddy JSON
+
+For advanced use cases that the UI does not cover, you can inject raw Caddy JSON into the proxy host configuration using two fields on the `ProxyHost` type:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `customReverseProxyJson` | string \| null | Raw JSON merged into the `reverse_proxy` handler for this host. Overrides or extends the generated reverse proxy config. |
+| `customPreHandlersJson` | string \| null | Raw JSON array of Caddy route handlers inserted before the reverse proxy handler. Use this to add middleware such as custom responders or transforms. |
+
+<Warning>
+  Custom JSON bypasses all validation. Incorrect JSON can break your proxy configuration. Test changes carefully and keep a backup of working configurations.
+</Warning>

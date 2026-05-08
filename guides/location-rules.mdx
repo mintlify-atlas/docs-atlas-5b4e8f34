@@ -1,0 +1,131 @@
+---
+title: "Path-based routing with location rules"
+description: "Route different URL paths to separate upstreams within a single proxy host using location rules — ideal for microservices and API gateway patterns."
+---
+
+Location rules let a single proxy host route requests to different upstream targets based on the URL path. Instead of creating separate proxy hosts for each service, you define rules on one host: `/api/*` goes to your API server, `/ws/*` goes to a WebSocket server, and everything else goes to your frontend. This is modelled by the `LocationRule` type in `proxy-hosts.ts` and stored as `locationRules` on a `ProxyHost`.
+
+## How location rules work
+
+When a request arrives at a proxy host, Caddy evaluates the location rules in order before falling back to the host's default upstreams. Each `LocationRule` has a path pattern and a list of upstreams. If the request path matches the pattern, the request is forwarded to those upstreams — the default upstreams are not used for that request.
+
+This makes it possible to use one domain as a gateway for multiple backend services:
+
+- `/api/*` → `api-server:3000`
+- `/ws/*` → `websocket-server:8080`
+- `/*` → `frontend:3001` (the host's default upstream)
+
+Each location rule can also have multiple upstreams for load balancing across instances of that service.
+
+## Creating location rules
+
+<Steps>
+  <Step title="Open the proxy host">
+    Navigate to **Proxy Hosts**, find the host you want to configure, and click **Edit**.
+  </Step>
+  <Step title="Scroll to Location Rules">
+    In the edit form, expand the **Location Rules** section.
+  </Step>
+  <Step title="Add a rule">
+    Click **Add Location Rule**. Enter a **Path** pattern and one or more **Upstream** targets.
+  </Step>
+  <Step title="Add more rules as needed">
+    Repeat for each path you want to route separately. Order matters — see [Rule priority](#rule-priority) below.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The new routing takes effect immediately in Caddy.
+  </Step>
+</Steps>
+
+## Path pattern syntax
+
+Location rule paths use Caddy's path matcher syntax. The most common patterns are:
+
+| Pattern | Matches |
+|---------|---------|
+| `/api/*` | Any path starting with `/api/` |
+| `/ws/*` | Any path starting with `/ws/` |
+| `/static/*` | Any path starting with `/static/` |
+| `/health` | The exact path `/health` only |
+| `/v2/*` | Any path starting with `/v2/` |
+
+The `*` wildcard matches any sequence of path segments. Caddy path patterns are prefix-based by default when followed by `/*`.
+
+<Note>
+  Caddy path patterns are case-sensitive. `/API/*` and `/api/*` are different patterns.
+</Note>
+
+## Multiple upstreams per location
+
+Each `LocationRule` accepts an array of upstream addresses in its `upstreams` field:
+
+```typescript
+type LocationRule = {
+  path: string;       // e.g. "/api/*"
+  upstreams: string[]; // e.g. ["api-server-1:3000", "api-server-2:3000"]
+};
+```
+
+When a location rule has multiple upstreams, Caddy load balances across them using the default policy (`random`). This is useful for scaling individual services independently — you can run three instances of your API server and one instance of your frontend, all behind the same domain.
+
+## Rule priority
+
+Caddy evaluates location rules in the order they are listed. More specific patterns should come before less specific ones.
+
+If you have both `/api/v2/*` and `/api/*`, list `/api/v2/*` first. If `/api/*` appears first, it matches all `/api/` paths including `/api/v2/` ones, so the more specific rule is never reached.
+
+The host's default upstreams act as a final fallback — they handle any request that does not match any location rule.
+
+<Tip>
+  Order your location rules from most specific to least specific. Exact path rules should appear before wildcard rules.
+</Tip>
+
+## Example: Microservices gateway
+
+A single domain `app.example.com` serves three separate services:
+
+| Path | Service | Upstream |
+|------|---------|----------|
+| `/api/*` | Backend REST API | `backend:3000` |
+| `/ws/*` | WebSocket server | `websocket:8080` |
+| `/*` | React frontend | `frontend:3001` (default upstream) |
+
+Location rules configuration:
+
+```json
+[
+  {
+    "path": "/api/*",
+    "upstreams": ["backend:3000"]
+  },
+  {
+    "path": "/ws/*",
+    "upstreams": ["websocket:8080"]
+  }
+]
+```
+
+Set `frontend:3001` as the host's default upstream. The location rules capture `/api/*` and `/ws/*` requests; all other paths (including `/`, `/about`, `/login`) fall through to the frontend.
+
+Enable `allowWebsocket` on the proxy host so that WebSocket upgrade headers are forwarded correctly to the `/ws/*` upstream.
+
+## Example: API versioning
+
+Route two API versions to separate backend services while keeping the same domain:
+
+```json
+[
+  {
+    "path": "/api/v2/*",
+    "upstreams": ["new-api:4000"]
+  },
+  {
+    "path": "/api/v1/*",
+    "upstreams": ["legacy-api:3000"]
+  }
+]
+```
+
+Requests to `/api/v2/users` go to `new-api:4000`. Requests to `/api/v1/users` go to `legacy-api:3000`. The `/api/v2/*` rule is listed first because it is more specific than `/api/v1/*` — in this case order does not actually matter since the prefixes do not overlap, but it is good practice.
+
+This pattern allows a zero-downtime migration: run the old and new API versions in parallel, shift traffic gradually by updating your client applications, then remove the old rule when the migration is complete.

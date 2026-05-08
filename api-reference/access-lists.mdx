@@ -1,0 +1,77 @@
+---
+title: "REST API endpoints for access lists"
+description: "REST API for HTTP basic auth access lists. Create lists with bcrypt-hashed user credentials and assign them to proxy hosts to require authentication."
+---
+
+Access lists protect proxy hosts with HTTP basic authentication. Each list holds one or more username/password pairs; passwords are bcrypt-hashed before storage and are never returned in API responses.
+
+## Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/access-lists` | List all access lists |
+| `POST` | `/api/v1/access-lists` | Create an access list |
+| `GET` | `/api/v1/access-lists/{id}` | Get an access list by ID |
+| `PUT` | `/api/v1/access-lists/{id}` | Update an access list |
+| `DELETE` | `/api/v1/access-lists/{id}` | Delete an access list |
+
+## Create an access list
+
+**`POST /api/v1/access-lists`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/access-lists \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "staging-team",
+    "users": [
+      {"username": "alice", "password": "s3cr3t-pass!"},
+      {"username": "bob", "password": "another-pass!"}
+    ]
+  }'
+```
+
+### Request fields
+
+<ParamField body="name" type="string" required>
+  Display name for the access list (e.g. `staging-team`, `internal-tools`).
+</ParamField>
+
+<ParamField body="users" type="object[]" required>
+  Array of user credentials.
+  <Expandable title="user object">
+    <ParamField body="username" type="string" required>
+      The username for HTTP basic auth.
+    </ParamField>
+    <ParamField body="password" type="string" required>
+      The plain-text password (hashed with bcrypt before storage).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response object
+
+```json
+{
+  "id": 1,
+  "name": "staging-team",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updatedAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+Passwords are never included in response objects.
+
+## Assign to a proxy host
+
+To apply an access list to a proxy host, include `accessListId` in the proxy host create or update request:
+
+```bash
+curl -X PUT https://your-instance:3000/api/v1/proxy-hosts/1 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"accessListId": 1}'
+```
+
+One access list can be assigned to multiple proxy hosts simultaneously.

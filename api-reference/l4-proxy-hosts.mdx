@@ -1,0 +1,103 @@
+---
+title: "REST API endpoints for L4 TCP/UDP proxy hosts"
+description: "CRUD endpoints for layer-4 TCP/UDP stream proxy hosts. Configure TLS SNI matching, proxy protocol, load balancing, and geo blocking for raw stream traffic."
+---
+
+L4 proxy hosts configure Caddy's layer-4 stream proxying for TCP and UDP traffic. The API provides full CRUD operations for creating and managing these stream proxy entries programmatically.
+
+## Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/l4-proxy-hosts` | List all L4 proxy hosts |
+| `POST` | `/api/v1/l4-proxy-hosts` | Create an L4 proxy host |
+| `GET` | `/api/v1/l4-proxy-hosts/{id}` | Get an L4 proxy host by ID |
+| `PUT` | `/api/v1/l4-proxy-hosts/{id}` | Update an L4 proxy host |
+| `DELETE` | `/api/v1/l4-proxy-hosts/{id}` | Delete an L4 proxy host |
+
+## Create an L4 proxy host
+
+**`POST /api/v1/l4-proxy-hosts`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/l4-proxy-hosts \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Database Proxy",
+    "protocol": "tcp",
+    "listenAddress": ":5432",
+    "upstreams": ["db.internal:5432"],
+    "matcherType": "none",
+    "enabled": true
+  }'
+```
+
+### Request fields
+
+<ParamField body="name" type="string" required>
+  Display name for the L4 proxy host.
+</ParamField>
+
+<ParamField body="protocol" type='"tcp" | "udp"' required>
+  The transport protocol to proxy.
+</ParamField>
+
+<ParamField body="listenAddress" type="string" required>
+  The address and port to listen on, e.g. `:5432` or `0.0.0.0:2222`.
+</ParamField>
+
+<ParamField body="upstreams" type="string[]" required>
+  One or more upstream addresses to forward traffic to, e.g. `["db.internal:5432"]`.
+</ParamField>
+
+<ParamField body="matcherType" type='"none" | "tls_sni" | "http_host" | "proxy_protocol"'>
+  How to match incoming connections. Use `tls_sni` to route based on TLS Server Name Indication. Defaults to `none`.
+</ParamField>
+
+<ParamField body="matcherValue" type="string[]">
+  Values for the matcher (e.g. hostnames for `tls_sni` or `http_host`).
+</ParamField>
+
+<ParamField body="tlsTermination" type="boolean">
+  Whether to terminate TLS at Caddy rather than passing it through to the upstream.
+</ParamField>
+
+<ParamField body="proxyProtocolVersion" type='"v1" | "v2" | null'>
+  Send proxy protocol header to the upstream to pass the real client IP. Set to `v1` or `v2` to enable.
+</ParamField>
+
+<ParamField body="proxyProtocolReceive" type="boolean">
+  Accept proxy protocol headers from upstream clients (for chained proxies).
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Whether Caddy should listen on this port. Defaults to `true`.
+</ParamField>
+
+## Response object
+
+```json
+{
+  "id": 1,
+  "name": "Database Proxy",
+  "protocol": "tcp",
+  "listenAddress": ":5432",
+  "upstreams": ["db.internal:5432"],
+  "matcherType": "none",
+  "matcherValue": [],
+  "tlsTermination": false,
+  "proxyProtocolVersion": null,
+  "proxyProtocolReceive": false,
+  "enabled": true,
+  "loadBalancer": null,
+  "geoblock": null,
+  "geoblockMode": "merge",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updatedAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+<Note>
+Port changes trigger a Caddy container restart via the l4-port-manager sidecar. Brief downtime (a few seconds) is expected when adding or removing L4 hosts.
+</Note>

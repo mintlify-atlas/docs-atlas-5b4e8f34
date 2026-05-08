@@ -1,81 +1,170 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+title: "Get started with Caddy Proxy Manager"
+description: "Deploy Caddy Proxy Manager with Docker Compose and create your first HTTPS reverse proxy host. Covers installation, configuration, and first login."
 ---
 
-## Get started in three steps
+Caddy Proxy Manager runs as a Docker Compose stack that bundles Caddy Server, the dashboard, and optional analytics and geo-IP services. This guide walks you through cloning the repository, configuring your environment, starting the stack, and creating your first proxy host with automatic HTTPS.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, make sure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- **Docker Engine 24+** and **Docker Compose v2** installed (`docker compose version` should show v2.x)
+- Ports **80** and **443** available on the host (required for Let's Encrypt HTTP-01 challenge and HTTPS traffic)
+- Port **3000** available for the dashboard
+- A **domain name** with a DNS A record pointing to your server if you want automatic HTTPS certificates
 
-### Step 2: Deploy your changes
+## Deploy with Docker Compose
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Clone and configure">
+    Clone the repository and copy the example environment file:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    git clone https://github.com/fuomag9/caddy-proxy-manager.git
+    cd caddy-proxy-manager
+    cp .env.example .env
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    Open `.env` and set the following required variables:
 
-### Step 3: Go live
+    | Variable | Description |
+    |----------|-------------|
+    | `SESSION_SECRET` | 32-character random string used to encrypt sessions |
+    | `ADMIN_USERNAME` | Username for the initial admin account |
+    | `ADMIN_PASSWORD` | Password for the initial admin account (12+ chars, mixed case, numbers, special chars) |
+    | `BASE_URL` | Public URL where users access the dashboard (e.g. `https://caddy-manager.example.com`) |
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    Generate a secure `SESSION_SECRET` with:
 
-## Next steps
+    ```bash
+    openssl rand -base64 32
+    ```
 
-Now that you have your docs running, explore these key features:
+    A minimal production `.env` looks like:
+
+    ```env
+    SESSION_SECRET=<output from openssl>
+    ADMIN_USERNAME=admin
+    ADMIN_PASSWORD=YourStr0ng-P@ssw0rd123!
+    BASE_URL=https://caddy-manager.example.com
+    ```
+
+    <Warning>
+      Set `SESSION_SECRET` and `ADMIN_PASSWORD` to strong, unique values before starting the stack. The application requires a 32-character minimum session secret and a 12-character minimum password with mixed case, numbers, and special characters in production.
+    </Warning>
+
+    Restrict file permissions on `.env` to prevent other users from reading your credentials:
+
+    ```bash
+    chmod 600 .env
+    ```
+  </Step>
+
+  <Step title="Start the stack">
+    Start all services in detached mode:
+
+    ```bash
+    docker compose up -d
+    ```
+
+    Docker will pull the required images and start the `web`, `caddy`, `docker-socket-proxy`, and `l4-port-manager` containers. Wait for the health checks to pass — this takes about 40 seconds on first start.
+
+    Check that all containers are running:
+
+    ```bash
+    docker compose ps
+    ```
+
+    Access the dashboard at `http://localhost:3000/login` (or your `BASE_URL` if set).
+
+    <Tip>
+      To also start the ClickHouse analytics database, set `COMPOSE_PROFILES=clickhouse` in your `.env` and add `CLICKHOUSE_PASSWORD` before running `docker compose up -d`. See [Enable analytics](#enable-analytics-optional) below.
+    </Tip>
+  </Step>
+
+  <Step title="Log in">
+    Open `http://localhost:3000/login` in your browser. Enter the `ADMIN_USERNAME` and `ADMIN_PASSWORD` values you set in `.env`.
+
+    On first login, CPM creates the admin account from those environment variables. Subsequent changes to the credentials in `.env` do not update the stored account — use the **User Management** page to change the password after the initial setup.
+  </Step>
+
+  <Step title="Create your first proxy host">
+    1. In the sidebar, click **Proxy Hosts**.
+    2. Click **Add Proxy Host**.
+    3. Fill in the **Domain** field with your public hostname (e.g. `app.example.com`).
+    4. Set the **Upstream URL** to your backend service (e.g. `http://192.168.1.10:8080`).
+    5. Under **SSL**, enable **Automatic HTTPS** — Caddy will obtain a Let's Encrypt certificate for the domain automatically.
+    6. Click **Save**.
+
+    CPM sends the configuration to Caddy's Admin API. Caddy begins the ACME challenge immediately and serves HTTPS traffic once the certificate is issued, typically within a few seconds.
+
+    <Note>
+      Automatic HTTPS requires that the domain resolves to your server's public IP and that port 80 is reachable from the internet so Let's Encrypt can complete the HTTP-01 challenge.
+    </Note>
+  </Step>
+</Steps>
+
+## Enable analytics (optional)
+
+Analytics requires the ClickHouse service, which is activated via the `clickhouse` Docker Compose profile. Add the following to your `.env`:
+
+```env
+COMPOSE_PROFILES=clickhouse
+CLICKHOUSE_PASSWORD=your-clickhouse-password   # openssl rand -base64 32
+```
+
+Then restart the stack:
+
+```bash
+docker compose up -d
+```
+
+ClickHouse starts automatically and CPM connects to it. Traffic events and WAF events are stored with a 90-day TTL. The **Analytics** page in the dashboard shows live charts and event logs once data starts flowing.
+
+To disable analytics, remove `clickhouse` from `COMPOSE_PROFILES` (or leave the variable empty) and omit `CLICKHOUSE_PASSWORD`.
+
+## Enable geo IP updates (optional)
+
+Geo blocking requires MaxMind GeoLite2 databases. The bundled `geoipupdate` service downloads and refreshes them automatically every 72 hours.
+
+1. Register for a free MaxMind account at [maxmind.com](https://www.maxmind.com/).
+2. Generate a license key with **GeoLite2-Country** and **GeoLite2-ASN** edition permissions.
+3. Add the following to your `.env`:
+
+   ```env
+   GEOIPUPDATE_ACCOUNT_ID=your-account-id
+   GEOIPUPDATE_LICENSE_KEY=your-license-key
+   ```
+
+4. Add `geoipupdate` to `COMPOSE_PROFILES`:
+
+   ```env
+   # Enable both analytics and geo IP updates
+   COMPOSE_PROFILES=clickhouse,geoipupdate
+   ```
+
+5. Restart the stack:
+
+   ```bash
+   docker compose up -d
+   ```
+
+The databases are stored in the `geoip-data` Docker volume and are shared between the `web` and `caddy` containers. Geo blocking rules become available immediately after the first download completes.
+
+## What's next
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Configuration" icon="sliders" href="/configuration">
+    Full reference for every environment variable and Docker Compose volume in the stack.
+  </Card>
+  <Card title="Proxy hosts" icon="network-wired" href="/guides/proxy-hosts">
+    Configure load balancing, custom headers, location rules, and health checks.
+  </Card>
+  <Card title="Certificates" icon="certificate" href="/guides/certificates">
+    Set up DNS-01 challenge, import custom certificates, and issue mTLS client certs.
+  </Card>
+  <Card title="Web Application Firewall" icon="shield" href="/guides/waf">
+    Enable OWASP CRS protection, suppress rules, and write custom SecLang directives.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

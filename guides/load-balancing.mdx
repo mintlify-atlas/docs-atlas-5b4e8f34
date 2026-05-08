@@ -1,0 +1,180 @@
+---
+title: "Load balancing and health checks for proxy hosts"
+description: "Distribute traffic across multiple upstreams with 8 load balancing policies, active and passive health checks, retries, and automatic failover."
+---
+
+When a proxy host has multiple upstream targets, Caddy distributes incoming requests across them according to a load balancing policy. You can pair this with active health checks (Caddy probes upstreams on a schedule) and passive health checks (Caddy monitors live request failures) to automatically remove unhealthy upstreams from rotation. Load balancing is configured via the `LoadBalancerConfig` type on a `ProxyHost`.
+
+## Load balancing policies
+
+The `LoadBalancingPolicy` type defines eight strategies for selecting an upstream on each request:
+
+| Policy | Description | Best for |
+|--------|-------------|----------|
+| `random` | Select a random upstream for each request. | Stateless services with uniform capacity. |
+| `round_robin` | Rotate through upstreams in sequence. | Stateless services where you want even distribution. |
+| `least_conn` | Send each request to the upstream with the fewest active connections. | Long-lived connections (streaming, downloads, WebSockets). |
+| `ip_hash` | Hash the client IP address to consistently route the same client to the same upstream. | Session affinity without cookies. |
+| `first` | Always try the first upstream; use others only as fallback. | Active/standby deployments. |
+| `header` | Hash a specific request header value. Requires `policyHeaderField`. | Routing by tenant ID, API key, or any request header. |
+| `cookie` | Use a response cookie for session affinity. Sets a cookie on first response. Requires `policyCookieName`. | Stateful web applications needing sticky sessions. |
+| `uri_hash` | Hash the request URI. | Cache servers or sharded backends where the same URI should always go to the same server. |
+
+## Configuring load balancing
+
+<Steps>
+  <Step title="Add multiple upstreams">
+    On the proxy host edit form, add two or more upstream addresses. Load balancing is only active when there is more than one upstream.
+  </Step>
+  <Step title="Enable the load balancer">
+    Toggle **Load Balancer** on. The `LoadBalancerConfig.enabled` flag must be `true` for the settings below to take effect.
+  </Step>
+  <Step title="Choose a policy">
+    Select a policy from the **Policy** dropdown. The default is `random`.
+  </Step>
+  <Step title="Set policy-specific fields (if needed)">
+    - For `header`: enter the header name in **Policy Header Field** (`policyHeaderField`).
+    - For `cookie`: enter the cookie name in **Policy Cookie Name** (`policyCookieName`). Optionally set a **Policy Cookie Secret** (`policyCookieSecret`) to sign the cookie value.
+  </Step>
+  <Step title="Configure health checks and retries (optional)">
+    See the sections below for active health checks, passive health checks, and retry settings.
+  </Step>
+</Steps>
+
+The full `LoadBalancerConfig` type:
+
+```typescript
+type LoadBalancerConfig = {
+  enabled: boolean;
+  policy: LoadBalancingPolicy;
+  policyHeaderField: string | null;   // used by "header" policy
+  policyCookieName: string | null;    // used by "cookie" policy
+  policyCookieSecret: string | null;  // used by "cookie" policy
+  tryDuration: string | null;
+  tryInterval: string | null;
+  retries: number | null;
+  activeHealthCheck: LoadBalancerActiveHealthCheck | null;
+  passiveHealthCheck: LoadBalancerPassiveHealthCheck | null;
+};
+```
+
+## Active health checks
+
+Active health checks send HTTP requests to upstreams on a regular schedule, independently of user traffic. An upstream is taken out of rotation when a health check fails, and restored when it starts passing again.
+
+Configure active health checks via `LoadBalancerActiveHealthCheck`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Turn active health checking on or off. |
+| `uri` | string \| null | The path Caddy requests on the upstream, e.g. `/health`. Defaults to `/` if null. |
+| `port` | number \| null | Port to use for health checks. Defaults to the upstream's port if null. Useful when the health endpoint is on a different port. |
+| `interval` | string \| null | How often to send a health check, e.g. `"10s"`, `"30s"`. |
+| `timeout` | string \| null | Maximum wait time for a health check response, e.g. `"5s"`. |
+| `status` | number \| null | Expected HTTP status code for a healthy response. If null, any 2xx response is considered healthy. |
+| `body` | string \| null | Expected substring in the response body. The upstream is considered healthy only if the body contains this string. |
+
+**Example:** check `/health` every 15 seconds, require a `200` response within 5 seconds:
+
+```json
+{
+  "enabled": true,
+  "uri": "/health",
+  "interval": "15s",
+  "timeout": "5s",
+  "status": 200,
+  "body": null
+}
+```
+
+## Passive health checks
+
+Passive health checks observe live user traffic. When an upstream returns error responses or responds too slowly, Caddy marks it as unhealthy for a configurable duration without sending any dedicated probe requests.
+
+Configure passive health checks via `LoadBalancerPassiveHealthCheck`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Turn passive health checking on or off. |
+| `failDuration` | string \| null | How long to keep an upstream marked unhealthy after it fails, e.g. `"30s"`. After this duration, the upstream re-enters rotation. |
+| `maxFails` | number \| null | Number of consecutive failed requests before the upstream is marked unhealthy. |
+| `unhealthyStatus` | number[] \| null | HTTP status codes that count as failures, e.g. `[500, 502, 503]`. |
+| `unhealthyLatency` | string \| null | Response time threshold above which a request counts as a failure, e.g. `"3s"`. |
+
+**Example:** remove an upstream after 3 failures and keep it out for 60 seconds:
+
+```json
+{
+  "enabled": true,
+  "failDuration": "60s",
+  "maxFails": 3,
+  "unhealthyStatus": [500, 502, 503, 504],
+  "unhealthyLatency": null
+}
+```
+
+<Tip>
+  Combine active and passive health checks for maximum reliability: active checks detect a failed upstream before any user request reaches it, and passive checks catch degradation that the active check endpoint does not expose.
+</Tip>
+
+## Retries and failover
+
+The `LoadBalancerConfig` type includes three fields that control how Caddy handles upstream failures during a live request:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tryDuration` | string \| null | Total time budget Caddy spends trying different upstreams for a single request, e.g. `"5s"`. Caddy stops retrying when this duration is exceeded, even if retries remain. |
+| `tryInterval` | string \| null | Time to wait between upstream attempts, e.g. `"250ms"`. |
+| `retries` | number \| null | Maximum number of upstream attempts per request. A value of `3` means Caddy tries up to 3 different upstreams before returning an error to the client. |
+
+These settings work together: Caddy retries up to `retries` times, waiting `tryInterval` between each attempt, and gives up if `tryDuration` is exceeded regardless of remaining retry count.
+
+**Example — fast failover with 3 retries:**
+
+```json
+{
+  "tryDuration": "5s",
+  "tryInterval": "100ms",
+  "retries": 3
+}
+```
+
+## Session affinity
+
+Two policies provide sticky sessions — routing the same client consistently to the same upstream.
+
+### IP hash
+
+The `ip_hash` policy hashes the client's IP address. The same IP always maps to the same upstream (as long as the set of healthy upstreams does not change). No configuration beyond selecting the policy is needed.
+
+`ip_hash` is a good fit for APIs or backends that cache per-client state in memory, where the overhead of a full session store is not warranted.
+
+### Cookie-based affinity
+
+The `cookie` policy sets a response cookie containing a hash of the selected upstream. On subsequent requests, Caddy reads the cookie and routes to the same upstream.
+
+| Field | Description |
+|-------|-------------|
+| `policyCookieName` | Name of the affinity cookie, e.g. `"lb_session"`. |
+| `policyCookieSecret` | Optional secret used to HMAC-sign the cookie value, preventing clients from tampering with the upstream selection. |
+
+The cookie is `HttpOnly` and scoped to the request path. If the pinned upstream goes down, Caddy ignores the cookie and selects a new upstream, then sets a new cookie.
+
+## Header-based routing
+
+The `header` policy hashes the value of a specific request header to select an upstream. Set `policyHeaderField` to the name of the header:
+
+| Field | Description |
+|-------|-------------|
+| `policyHeaderField` | The request header to hash, e.g. `"X-Tenant-ID"`, `"X-API-Key"`. |
+
+This is useful in multi-tenant systems where you want all requests from a given tenant to land on the same upstream shard. Requests with the same header value always map to the same upstream (modulo upstream set changes), and requests without the header fall back to random selection.
+
+**Example:** route by tenant:
+
+```json
+{
+  "policy": "header",
+  "policyHeaderField": "X-Tenant-ID"
+}
+```

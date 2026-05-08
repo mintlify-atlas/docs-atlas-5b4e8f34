@@ -1,0 +1,78 @@
+---
+title: "Real-time traffic analytics and WAF event monitoring"
+description: "Monitor traffic with ClickHouse-powered analytics: live charts, protocol breakdown, country maps, top user agents, and a searchable WAF event log."
+---
+
+Caddy Proxy Manager stores traffic and WAF events in ClickHouse for fast aggregation queries. The **Analytics** dashboard shows live charts, geographic breakdowns, protocol statistics, and a searchable log of blocked requests. Data is retained for 90 days via a ClickHouse TTL policy — no manual cleanup is needed.
+
+## Enabling analytics
+
+Analytics requires the `clickhouse` Docker Compose profile. The default `.env.example` has it enabled, so you only need to set a password and start the stack.
+
+<Steps>
+  <Step title="Add ClickHouse credentials to .env">
+    ```bash .env
+    COMPOSE_PROFILES=clickhouse
+    CLICKHOUSE_PASSWORD=your-secure-password   # openssl rand -base64 32
+    ```
+  </Step>
+  <Step title="Start or restart the stack">
+    ```bash
+    docker compose up -d
+    ```
+    ClickHouse starts alongside the web and Caddy containers. The **Analytics** page becomes available once the `clickhouse` container passes its health check.
+  </Step>
+</Steps>
+
+## What's tracked
+
+Every request routed through Caddy is logged and ingested into ClickHouse. The Analytics dashboard surfaces the following metrics:
+
+| Metric | Description |
+|---|---|
+| Request count | Total requests over the selected time range |
+| Protocol breakdown | HTTP/1.1, HTTP/2, and HTTP/3 (QUIC) distribution |
+| Country map | Request origins plotted on a world map |
+| Top user agents | Most frequent browser and bot user agents |
+| Blocked requests | WAF-blocked requests with rule match details |
+| Traffic over time | Requests-per-minute chart with configurable range |
+
+## Configuring time ranges
+
+The Analytics page supports the following time windows: last 1 hour, 6 hours, 24 hours, 7 days, and 30 days. Caddy access logs are parsed and ingested continuously as traffic flows through, so charts update in near real time.
+
+## WAF event log
+
+The WAF event log is accessible at **WAF → Events** and is also surfaced in the Analytics dashboard. Each entry represents a single rule match and includes:
+
+- Request path and method
+- Matching rule ID and message
+- Severity classification
+- **Blocked** vs **Detected** status
+
+Use the event log to identify false positives before switching the WAF from detection mode to blocking mode. You can suppress individual rules directly from the event detail drawer.
+
+## Combining profiles
+
+To run analytics alongside the GeoIP update service, list both profiles in `COMPOSE_PROFILES`:
+
+```bash .env
+COMPOSE_PROFILES=clickhouse,geoipupdate
+CLICKHOUSE_PASSWORD=your-secure-password
+GEOIPUPDATE_ACCOUNT_ID=your-account-id
+GEOIPUPDATE_LICENSE_KEY=your-license-key
+```
+
+## Disabling analytics
+
+Remove `clickhouse` from `COMPOSE_PROFILES` (or leave the variable empty):
+
+```bash .env
+COMPOSE_PROFILES=
+```
+
+The web container starts normally without ClickHouse. The **Analytics** page displays a notice that ClickHouse is not enabled and no data is collected.
+
+## Data retention
+
+ClickHouse automatically deletes rows older than 90 days using a TTL policy configured at table creation time. No manual cleanup or cron job is required.

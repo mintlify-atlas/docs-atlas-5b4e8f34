@@ -1,0 +1,108 @@
+---
+title: "REST API endpoints for users, groups, and tokens"
+description: "REST API endpoints for CPM users, groups, and API tokens. Manage roles, enable or disable accounts, control group membership, and create or revoke tokens."
+---
+
+The users, groups, and tokens APIs allow programmatic management of dashboard accounts and access control. All endpoints require an Admin-level API token.
+
+## User endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/users` | List all users |
+| `GET` | `/api/v1/users/{id}` | Get a user by ID |
+| `PUT` | `/api/v1/users/{id}` | Update a user |
+| `DELETE` | `/api/v1/users/{id}` | Delete a user |
+
+## Update a user
+
+**`PUT /api/v1/users/{id}`**
+
+```bash
+curl -X PUT https://your-instance:3000/api/v1/users/2 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"role": "admin"}'
+```
+
+<ParamField body="role" type='"admin" | "user" | "viewer"'>
+  The user's dashboard role. See [User Management](/guides/user-management) for capability details.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Set to `false` to suspend the account without deleting it.
+</ParamField>
+
+## User response object
+
+```json
+{
+  "id": 2,
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "role": "admin",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updatedAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+## Group endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/groups` | List all groups |
+| `POST` | `/api/v1/groups` | Create a group |
+| `GET` | `/api/v1/groups/{id}` | Get a group by ID |
+| `PUT` | `/api/v1/groups/{id}` | Update a group |
+| `DELETE` | `/api/v1/groups/{id}` | Delete a group |
+
+## Create a group
+
+**`POST /api/v1/groups`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/groups \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "engineering"}'
+```
+
+<ParamField body="name" type="string" required>
+  Display name for the group.
+</ParamField>
+
+Groups are used with the Forward Auth Portal to grant access to protected proxy hosts. See [Forward Auth](/guides/forward-auth) for details.
+
+## API token endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/tokens` | List API tokens (names only — values not returned) |
+| `POST` | `/api/v1/tokens` | Create an API token |
+| `DELETE` | `/api/v1/tokens/{id}` | Revoke an API token |
+
+## Create an API token
+
+**`POST /api/v1/tokens`**
+
+```bash
+curl -X POST https://your-instance:3000/api/v1/tokens \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "CI/CD Pipeline",
+    "expiresAt": "2025-12-31T00:00:00.000Z"
+  }'
+```
+
+<ParamField body="name" type="string" required>
+  A descriptive label for the token.
+</ParamField>
+
+<ParamField body="expiresAt" type="string (ISO 8601)">
+  Optional expiration date. Omit for a non-expiring token.
+</ParamField>
+
+<Warning>
+The token value is returned only in the creation response. Store it immediately — it cannot be retrieved again.
+</Warning>

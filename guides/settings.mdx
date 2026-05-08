@@ -1,0 +1,105 @@
+---
+title: "Global settings: ACME email, DNS providers, and metrics"
+description: "Configure global defaults: ACME email for Let's Encrypt, DNS provider credentials, upstream DNS pinning, Prometheus metrics, and Caddy access log format."
+---
+
+The **Settings** page controls global defaults that apply across all proxy hosts. Settings are stored in the database and — when using instance sync — pushed to slave instances on every change. Each setting group maps to a typed structure stored under a known key in the `settings` table.
+
+## General settings
+
+The general settings group (`GeneralSettings`) holds the top-level site configuration:
+
+| Field | Description |
+|---|---|
+| `primaryDomain` | Primary domain for the CPM dashboard itself |
+| `acmeEmail` | Email address sent to Let's Encrypt / ZeroSSL for expiry notifications |
+
+Set a valid email address in the **ACME email** field so you receive certificate expiry warnings from the ACME CA. This is required by Let's Encrypt's terms of service.
+
+## DNS providers
+
+Configure DNS provider credentials for DNS-01 ACME challenge support. DNS-01 is required for wildcard certificates (`*.example.com`) and for environments where ports 80 and 443 are not reachable from the internet.
+
+The `DnsProviderSettings` type stores a map of provider credentials keyed by provider name, plus a `default` field that names which provider to use when no per-certificate override is set.
+
+<Steps>
+  <Step title="Open DNS Providers settings">
+    Navigate to **Settings → DNS Providers** and click **Add Provider**.
+  </Step>
+  <Step title="Select a provider and enter credentials">
+    Choose your DNS provider and fill in the required credential fields. Fields marked as `password` type are encrypted at rest using AES-256-GCM before being stored in the database.
+  </Step>
+  <Step title="Set a default provider">
+    Mark one provider as the default to use it automatically for all new certificates. You can override this per certificate in the **Certificates** page.
+  </Step>
+</Steps>
+
+See [Certificate management](/guides/certificates) for the full list of supported providers and per-certificate override instructions.
+
+## Custom DNS resolvers
+
+The `DnsSettings` type configures the DNS resolvers Caddy uses when resolving upstream hostnames during request handling:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Enable custom resolver configuration |
+| `resolvers` | `string[]` | Primary DNS resolvers, e.g. `["1.1.1.1", "8.8.8.8"]` |
+| `fallbacks` | `string[]` | Fallback resolvers used if primary fails |
+| `timeout` | `string` | DNS query timeout, e.g. `"5s"` |
+
+When disabled, Caddy uses the system resolver from the container environment.
+
+## Upstream DNS pinning
+
+When enabled globally, CPM resolves upstream hostnames to IP addresses at config-save time and writes concrete IP dials to Caddy, bypassing DNS resolution at request time. This can improve latency and predictability for upstreams with stable IP addresses.
+
+The `UpstreamDnsResolutionSettings` type exposes two fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Enable upstream DNS pinning globally |
+| `family` | `"ipv4" \| "ipv6" \| "both"` | Address family to resolve; `both` prefers IPv6 |
+
+Individual proxy hosts can override the global setting from the **Upstream DNS Pinning** tab on the host edit form.
+
+<Note>
+  If a reverse proxy handler contains multiple HTTPS upstream hostnames, DNS pinning is skipped for those HTTPS upstreams to avoid TLS SNI mismatch. HTTP upstreams in the same handler are still pinned.
+</Note>
+
+## Authentik integration
+
+The `AuthentikSettings` type configures the Authentik forward-auth outpost that CPM can use as an external identity provider for proxy hosts:
+
+| Field | Description |
+|---|---|
+| `outpostDomain` | Domain of the Authentik outpost |
+| `outpostUpstream` | Upstream address for the outpost (used in Caddy's `forward_auth` directive) |
+| `authEndpoint` | Optional override for the authentication endpoint URL |
+
+See the Authentik documentation for how to configure an outpost and obtain these values.
+
+## Prometheus metrics
+
+Enable Prometheus metrics scraping for Caddy's built-in metrics endpoint. The `MetricsSettings` type has the following fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Expose the Caddy metrics endpoint |
+| `port` | `number` | Port to serve metrics on (default: `9090`) |
+
+Once enabled, metrics are available at the configured port. To expose them outside the container, uncomment the corresponding port mapping in `docker-compose.yml`.
+
+## Logging format
+
+The `LoggingSettings` type controls Caddy's access log output:
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `boolean` | Enable access logging |
+| `format` | `"json" \| "console"` | Log format (default: `json`) |
+
+Use `json` format when ingesting logs into external systems such as Loki, Elasticsearch, or ClickHouse. Use `console` for human-readable output during local development.
+
+## WAF settings
+
+Global WAF configuration (`WafSettings`) is managed from **WAF → Settings** rather than the main Settings page, but the values are stored in the same settings table. See the [WAF guide](/guides/waf) for full details.
